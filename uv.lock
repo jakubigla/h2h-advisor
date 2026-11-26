@@ -290,7 +290,7 @@ wheels = [
 
 [[package]]
 name = "h2h-advisor"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },
