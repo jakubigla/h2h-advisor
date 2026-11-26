@@ -52,6 +52,7 @@ from h2h_advisor.analysis.streamers import (
     activate_il,
     drop_pool,
     effective_start,
+    first_play_day,
 )
 from h2h_advisor.analysis.streamers import long_term_upgrades as long_term_upgrades_ctx
 from h2h_advisor.analysis.streamers import plan_adds as plan_adds_ctx
@@ -82,7 +83,7 @@ from h2h_advisor.sources.errors import ParseError
 from h2h_advisor.sources.espn import EspnError, EspnSource, RecentMinutes
 from h2h_advisor.sources.schedule import Schedule
 from h2h_advisor.sources.yahoo.parsers import LeagueRef
-from h2h_advisor.sources.yahoo.source import YahooSource
+from h2h_advisor.sources.yahoo.source import WAIVERS_LIMIT, YahooSource
 
 # Fantasy days follow the NBA calendar (US Eastern), like BBM's day pages.
 NBA_TZ = ZoneInfo("America/New_York")
@@ -994,13 +995,16 @@ class Advisor:
         """BBM free agents and waiver players, with Yahoo's waivers list as authority.
 
         Every player on Yahoo's waivers page is on waivers with Yahoo's date, whatever
-        BBM's Own column says; BBM waiver players Yahoo does not list keep no date.
+        BBM's Own column says. BBM's column lags: a BBM waiver player missing from a
+        complete Yahoo list has cleared and is a free agent; only when the list may be
+        cut off (WAIVERS_LIMIT players) or did not load does he stay undated.
         Yahoo's player (positions, injury status) wins; the key stays BBM's so
         projections line up. Otherwise the injury status comes from BBM.
         """
         rows = [r for r in page.rows if r.own in ("free_agent", "waivers")]
         waivers = self._waivers(call, lid, refresh)
         yahoo_waivers = {f.player.key: f for f in waivers or []}
+        complete = waivers is not None and len(waivers) < WAIVERS_LIMIT
         # Yahoo's shortened names ("N. Alexander-Walker") against BBM's full ones
         yahoo_by_bbm_key = {
             bbm: yahoo_waivers[yahoo]
@@ -1039,7 +1043,7 @@ class Advisor:
                         waiver_clear=found.waiver_clear,
                     )
                 )
-            elif row.own == "waivers":
+            elif row.own == "waivers" and not complete:
                 undated.append(p.name)
                 out.append(FreeAgent(player, on_waivers=True, waiver_clear=None))
             else:
@@ -1159,7 +1163,9 @@ class Advisor:
         probe = replace(probe, schedule=schedule)
         to_load = [d for d in days if d >= start]
         if horizon == "today":
-            to_load = to_load[:1]
+            # the day the streamers are scored on: past a day without NBA games
+            first = first_play_day(schedule, to_load)
+            to_load = [first] if first is not None else []
         # BBM rows are keyed in Yahoo's key space for the rostered players, so the
         # rest of the build (per game, active days, values, ROS cats) stays keyed by
         # Yahoo's player.key even when Yahoo shortens a first name.

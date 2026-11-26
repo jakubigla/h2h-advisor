@@ -36,6 +36,7 @@ from h2h_advisor.sources.errors import ParseError
 from h2h_advisor.sources.espn import EspnError, RecentMinutes
 from h2h_advisor.sources.yahoo import urls as yahoo_urls
 from h2h_advisor.sources.yahoo.parsers import LeagueRef, parse_league_list
+from h2h_advisor.sources.yahoo.source import WAIVERS_LIMIT as YAHOO_WAIVERS_LIMIT
 
 FIXTURES = Path(__file__).parent / "fixtures" / "yahoo"
 BBM_FIXTURES = Path(__file__).parent / "fixtures" / "bbm"
@@ -788,9 +789,25 @@ def test_waiver_player_reconciled_to_one_row_is_not_merged_into_another(make):
     assert len(fas) == len({f.player.key for f in fas})
 
 
-def test_waiver_without_yahoo_date_keeps_none_with_notice(make):
+def test_bbm_waiver_player_missing_from_a_complete_yahoo_list_is_a_free_agent(make):
+    # BBM's Own column lags: Yahoo's full waivers list is the authority.
     world = World(yahoo_waivers=[])
     env = make(world).advisor.free_agents(B)
+    player = next(f for f in env.data["free_agents"] if f.player.key == WAIVER.key)
+    assert not player.on_waivers and player.waiver_clear is None
+    assert not any("no Yahoo waiver date" in n for n in env.notices)
+
+
+def test_waiver_without_yahoo_date_keeps_none_when_the_yahoo_list_is_cut_off(make):
+    others = [
+        FreeAgent(
+            Player(player_key(f"Other {i}", "SAC"), f"Other {i}", "SAC", ("C",)),
+            on_waivers=True,
+            waiver_clear=date(2026, 11, 28),
+        )
+        for i in range(YAHOO_WAIVERS_LIMIT)
+    ]
+    env = make(World(yahoo_waivers=others)).advisor.free_agents(B)
     waiver = next(f for f in env.data["free_agents"] if f.player.key == WAIVER.key)
     assert waiver.on_waivers and waiver.waiver_clear is None
     assert any("Waiver Guy" in n for n in env.notices)

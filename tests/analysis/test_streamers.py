@@ -316,6 +316,27 @@ def test_tomorrow_lineup_shifts_start():
     assert options[0].usable_days == [day(1)]
 
 
+def test_today_rolls_past_a_day_without_nba_games():
+    # Thanksgiving: no games today, so "today" means the first day an add can play.
+    ctx, fas, pool = streaming_ctx({"tmrw": [day(1)], "later": [day(2)]})
+    ctx = replace(ctx, schedule={**ctx.schedule, day(0): frozenset()})
+    options, reason = rank_streamers(ctx, fas, pool, "today", NO_BUILD)
+    assert reason is None
+    assert [o.add.key for o in options] == ["tmrw"]
+    assert options[0].start_days == [day(1)]
+
+
+def test_today_does_not_roll_past_a_day_without_a_schedule():
+    # A missing day page is unknown, not a day without games.
+    ctx, fas, pool = streaming_ctx({"tmrw": [day(1)]})
+    schedule = {d: teams for d, teams in ctx.schedule.items() if d != day(0)}
+    ctx = replace(ctx, schedule=schedule)
+    assert rank_streamers(ctx, fas, pool, "today", NO_BUILD) == (
+        [],
+        "no eligible free agent",
+    )
+
+
 def test_waiver_player_excluded_today():
     ctx, _, pool = streaming_ctx({"w": WEEK_DAYS, "f": [day(0)]})
     waiver = fa("w", "W", on_waivers=True, waiver_clear=day(2))
