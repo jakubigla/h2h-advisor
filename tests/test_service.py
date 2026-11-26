@@ -733,7 +733,8 @@ def test_bbm_league_ambiguous_falls_back_to_yahoo_with_notice(make):
     assert rig.world.count(f"y/players/{A}?status=A") == 1
     assert not any(u.startswith("b/league/") for u in rig.world.loads)
     notice = next(n for n in env.notices if "set bbm_league_id for Hoops League" in n)
-    assert "_3. Hoops Lea…" in notice
+    # The option value is what goes in the config, so the notice carries it.
+    assert "1001 = _1. Hoops… (Yahoo!); 1003 = _3. Hoops Lea…" in notice
     assert {f.player.key for f in env.data["free_agents"]} == {
         HOT.key,
         MEH.key,

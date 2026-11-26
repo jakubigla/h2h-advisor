@@ -1,0 +1,14 @@
+[global]
+never_drop = ["Victor Wembanyama", "Joel Embiid"]
+
+[league."11111"]
+never_drop = []
+build = { strong = ["FT_PCT", "TPM", "PTS", "AST", "STL"], punt = ["FG_PCT", "TO", "BLK"], weak = ["REB"] }
+
+[league."22222"]
+never_drop = ["Tyrese Haliburton"]
+bbm_league_id = "30008"
+
+[league."33333"]
+never_drop = []
+stream_slots = 4

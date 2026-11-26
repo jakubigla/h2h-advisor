@@ -39,5 +39,5 @@
    "facts": ["No NBA games: 2026-11-26","Close categories: AST (51%)","Usable games left: me 27, opponent 23 (+4)"]}
  }},
  "ages": {"yahoo": {"fetched_at": "2026-11-26T09:02:00+01:00", "stale": false}, "bbm": {"fetched_at": "2026-11-25T18:40:00+01:00", "stale": true}},
- "notices": ["set bbm_league_id for Hoops League B in config (BBM leagues: 1. Some Roto League (Yahoo!), _2. Hoops Lg B (Yahoo!))"]
+ "notices": ["set bbm_league_id for Hoops League B in config (BBM leagues: 5344 = 1. Some Roto League (Yahoo!); 30008 = _2. Hoops Lg B (Yahoo!))"]
 }

@@ -949,7 +949,9 @@ class Advisor:
         free_options = {v: t for v, t in options.items() if v not in taken}
         bbm_id = match_bbm_leagues(names, free_options).get(lid)
         if bbm_id is None:
-            listing = ", ".join(sorted(options.values())) or "none loaded"
+            # "<option value> = <name>": the value is what goes in the config.
+            by_name = sorted(options.items(), key=lambda o: o[1])
+            listing = "; ".join(f"{v} = {t}" for v, t in by_name) or "none loaded"
             call.notice(
                 f"set bbm_league_id for {settings.name} in config (BBM leagues: {listing})"
             )

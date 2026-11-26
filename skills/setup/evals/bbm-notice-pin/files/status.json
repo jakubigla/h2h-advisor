@@ -1,0 +1,4 @@
+{"data": {"sites": {
+  "yahoo": {"logged_in": true, "login_reason": null, "login_checked_at": "2026-11-26T07:41:12+00:00", "loads_today": 41, "daily_cap": 250, "backed_off_until": null},
+  "bbm": {"logged_in": true, "login_reason": null, "login_checked_at": "2026-11-26T07:40:55+00:00", "loads_today": 22, "daily_cap": 80, "backed_off_until": null}},
+  "cache": {}, "blocked": []}, "ages": {}, "notices": []}

@@ -1,127 +1,163 @@
 ---
 name: setup
-description: Use when setting up h2h-advisor for the first time or again - logging in to Yahoo and Basketball Monster, a "needs login" notice, adding or changing leagues, never-drop players, league builds (punt/strong categories), stream slots, a "set bbm_league_id" notice, or editing the h2h-advisor config.
+description: Set up or repair h2h-advisor - log in to Yahoo Fantasy and Basketball Monster, find the leagues, and write or edit the h2h-advisor config (never-drop players, league builds with punt/strong categories, stream slots, the Basketball Monster league id). Use for a first run, a "needs login" or "set bbm_league_id" notice, h2h-advisor tools that are missing or fail with a config error, a newly joined league, or any change to a league's season-long settings, even when the user never says "setup". Short-lived guidance on a player ("keep him while the starter is out") is a note for streaming-advisor, not config.
 ---
 
 # h2h-advisor setup
 
-Guided, re-runnable setup. It is idempotent: read what exists, keep it, and ask only about what is
-new or missing. Go step by step; do not skip ahead.
+Gets h2h-advisor working and keeps its config right. It is re-runnable: each run does what is
+missing or what the user came to change, and leaves everything else alone.
 
-**Never log in through MCP tools** - no tool can, and none should try. Login is always the user's,
-in a plain Chrome window. Never write the config without showing the full file and getting a yes.
+Two things never bend:
 
-## 1. Prerequisites
+- **The user logs in, by hand.** No MCP tool can log in and none should try: Google refuses
+  sign-in in browsers that automation drives, so login happens in a plain Chrome window the user
+  operates.
+- **Show the whole config file and get a yes before writing it.** The file holds the user's
+  season-long choices; an unseen edit can silently undo one.
 
-Check with Bash and report each one:
+## What things cost
 
-- `uv --version` (missing → install from https://docs.astral.sh/uv/).
-- Google Chrome: `ls "/Applications/Google Chrome.app"` (or the path in env `H2H_ADVISOR_CHROME`).
-- The MCP server answers: call `status()`. If the tool is missing, the plugin's server did not
-  start: suggest `/mcp` to see the error.
+Uncached tool calls load real pages, 4-9 s each, against daily caps (Yahoo 250, Basketball
+Monster 80), and every result lands in context. Spend both on purpose:
 
-## 2. Login
+- `status()` loads nothing. `list_leagues` is 1 Yahoo page; `get_league_settings` 1 Yahoo page
+  per league (cached 7 days).
+- `get_free_agents(league, limit=1)` settles one league's Basketball Monster (BBM) match; a few
+  pages, cached an hour, and the check-up brief reuses them. `limit=1`: only its notice matters.
+- Do not call `get_projections(scope="ros")` here: it returns ~240K characters of projections.
+  The "set bbm_league_id" notice already lists every BBM league with its option value.
+- `daily_brief(leagues="all")` loads several pages per league and can take minutes.
+- Call each tool once per league; a repeat returns the cached answer and costs only tokens. Put
+  independent calls (settings for every league) in one parallel batch.
+- Ask in batches: one question round covering every league, not one league per turn.
 
-From `status()`: `sites.yahoo.logged_in` / `sites.bbm.logged_in` are `true`, `false` (needs login)
-or `null` (not checked yet - `status()` loads no pages). If both are `true`, skip to step 4.
+## Start: read the state, then route
 
-Otherwise explain, then ask before launching anything:
+First, both free:
+
+1. Read `~/.config/h2h-advisor/config.toml` (under `$H2H_ADVISOR_HOME` instead of `~` when that
+   is set). No file means a first run.
+2. Call `status()`. `sites.<site>.logged_in` is `true`, `false` (needs login) or `null` (not
+   checked yet).
+
+If the h2h-advisor tools are missing, or every call fails, go to **Diagnose** before anything
+else. Otherwise go only where the trigger leads:
+
+| What brought you here | Do |
+|---|---|
+| First run, or "set it up" | Login (if not both `true`) → Leagues → Choices → Write → Check |
+| "<site> needs login", or `logged_in: false` | Login → Verify. The config is not touched. |
+| "set bbm_league_id for <league> (BBM leagues: …)" | Choices step 1 for that league → Write → Check |
+| Change never-drop, a build or stream slots | that choice → Write → Check |
+| A league the config lacks (`list_leagues` shows it) | Leagues and Choices for that league only |
+| Guidance that expires ("keep him this week", "drop him first") | Not config: a note. `add_note(...)`, as streaming-advisor does. |
+
+On a re-run, whatever the config already holds is settled: do not ask about it again unless the
+user raises it.
+
+## Diagnose
+
+- **A tool error naming `config.toml`** (invalid TOML, an unknown key, `never_drop` given as a
+  string): the config is broken and every tool fails until it is fixed. Read the file, find the
+  line, then go to Write with the corrected whole file.
+- **Tools missing.** In Claude Code they are `mcp__plugin_h2h-advisor_h2h-advisor__*` and may need
+  loading with ToolSearch first. If they are truly absent, check `uv --version` (missing → install
+  from https://docs.astral.sh/uv/) and Chrome (`ls "/Applications/Google Chrome.app"`, or the path
+  in `$H2H_ADVISOR_CHROME`), then start the server by hand to see why it does not come up:
+
+  ```bash
+  (echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"setup","version":"0"}}}'; sleep 5) | uv run --directory ${CLAUDE_PLUGIN_ROOT} h2h-advisor serve
+  ```
+
+  A JSON reply with `serverInfo` means the server is fine and only the connection is not:
+  `/mcp` → h2h-advisor → reconnect. A traceback is the real error: show it. A second
+  `h2h-advisor` server that fails while the plugin's one works is a duplicate registration (a
+  project `.mcp.json`, say); use the plugin's tools.
+
+## Login
+
+Explain, then ask before launching anything:
 
 > A plain Google Chrome window will open with Yahoo Fantasy and Basketball Monster. Log in to both
 > by hand (Google sign-in works there), then quit that Chrome with **Cmd+Q** (closing the window
 > is not enough on macOS). The cookies stay in h2h-advisor's own Chrome profile.
 
-Two ways, the user picks:
+The user picks one of two ways:
 
-- The user runs it: `! uv run --directory ${CLAUDE_PLUGIN_ROOT} h2h-advisor login` (give them the
-  command with the plugin's real path filled in)
-- With their explicit OK, you run it via Bash: `uv run --directory ${CLAUDE_PLUGIN_ROOT} h2h-advisor login`
-  with `run_in_background: true` (it waits until Chrome quits, which can take minutes).
+- They run it: `! uv run --directory ${CLAUDE_PLUGIN_ROOT} h2h-advisor login`
+- With their explicit OK, you run the same command with Bash, `run_in_background: true` (it
+  waits until Chrome quits, which can take minutes).
 
-If it says "That Chrome profile is already open", that h2h-advisor Chrome is still running: quit
-it with Cmd+Q and rerun. If it reports the browser is busy, another session's MCP server holds the
-browser: retry when that session is idle.
+Without Bash (Claude Desktop chat), give the command without the `!` for a terminal.
 
-## 3. Verify
+"That Chrome profile is already open": the h2h-advisor Chrome is still running; Cmd+Q it and
+rerun. "browser busy": another session's server holds the browser; retry when it is idle.
 
-After Chrome has quit: `list_leagues(refresh=true)` (one Yahoo page), then `status()`.
-`sites.yahoo.logged_in` must be `true`. BBM is checked by the first BBM page in step 5; if a
-"needs login" notice appears there, go back to step 2.
+**Verify** once Chrome has quit: `list_leagues(refresh=true)` (one Yahoo page), then `status()`;
+`sites.yahoo.logged_in` must be `true`. BBM is checked by the first BBM page (Choices step 1 or
+the check-up brief); a "bbm needs login" notice there sends you back here.
 
-## 4. Discover leagues
+## Leagues
 
-`list_leagues()`: show each league's id, name and team name.
+`list_leagues()`, then `get_league_settings` for each league the config lacks, in one batch.
+Show one compact table: league id and name, team, scoring (`categories` or `one_win`), max adds
+per week, FAB waivers or not.
 
-## 5. Per league
+## Choices
 
-For each league (and only for what the current config lacks, on a re-run):
+Gather what you need for every new league first, then ask about all of them in one round.
+Where the user has no view, the default is a fine answer; offer it as one.
 
-1. `get_league_settings(league)`: show categories, roster slots, max adds per week, scoring type
-   (`categories` or `one_win`) and whether waivers use FAB.
-2. **BBM league match**: `get_free_agents(league, limit=5)`. A notice "matched <league> ↔ BBM …"
-   means it is matched by name; nothing to write. A notice "set bbm_league_id for <league> …"
-   means it is not: call `get_projections(scope="ros")` once, show
-   `data.league_options` (option value → BBM league name) and ask which one is this league. Write
-   the **option value** (the key, e.g. `"1234"`), not the visible name, as `bbm_league_id`.
-3. **Never-drop**: make sure the global list holds Victor Wembanyama (it is empty on a first run;
-   add him). Ask for additions, global or for this
-   league only.
-4. **Build**: pin `strong` / `punt` / `weak` categories, or leave unpinned to infer from rosters
-   and history. Ask how the user built the team; two common shapes, as examples only (never assume one):
-   - Guard-heavy: punt `FG_PCT`, `TO`, `BLK`; weak `REB` (still swing, not punted); strong
+1. **BBM league.** For each league without `bbm_league_id`: `get_free_agents(league, limit=1)`.
+   - "matched <league> ↔ BBM <name>": matched by name, nothing to write. Mention it.
+   - "set bbm_league_id for <league> (BBM leagues: 30008 = _2. I Liga H2H … (Yahoo!); …)":
+     propose the closest name and ask. BBM decorates names with a leading "_2." and a trailing
+     "(Yahoo!)", and small spellings differ ("1 Liga" vs "I Liga"). Write the option **value**,
+     quoted (`bbm_league_id = "30008"`), never the visible name, and never a value another league
+     already pins.
+   - "BBM leagues: none loaded": BBM did not load this time. Retry later; do not guess.
+2. **Never-drop.** Players protected all season, globally or for one league. Ask who; a
+   franchise player (Victor Wembanyama, say) is the typical case, but add only names the user
+   gives. Guidance with an end ("while he's hurt", "this week") is a note, not never-drop.
+3. **Build** (`strong` / `punt` / `weak` categories). Unpinned, the advisor infers it: from
+   win rates once the league has 3 finished weeks, before that from roster strengths. Pin it when
+   the user drafted for a plan. Ask how they built the team and never assume one. Two common
+   shapes, as examples only:
+   - Guard-heavy: punt `FG_PCT`, `TO`, `BLK`; weak `REB` (still contested, not punted); strong
      `FT_PCT`, `TPM`, `PTS`, `AST`, `STL`.
    - Big-man: strong `BLK`, `TO`, `FG_PCT`, `STL`, `REB`; weak `PTS`, `TPM`, `AST`, `FT_PCT`.
-5. **Stream slots** (optional): `stream_slots = N` forces the drop pool to the bottom N roster
+4. **Stream slots** (optional). `stream_slots = N` makes the drop pool the bottom N roster
    players by rest-of-season value. Default: automatic (players near replacement level).
 
-## 6. Write the config
+## Write
 
-File: `~/.config/h2h-advisor/config.toml` (under `$H2H_ADVISOR_HOME` instead of `~` when that is
-set). Read the existing file first and **merge**: keep every key and league already there, add or
-change only what the user agreed to. Show the **full resulting file** and ask for confirmation; write
-it only after a yes. Then validate it (the TOML, the keys and every pinned build's category names;
-fix and re-confirm on any error):
+Read `references/config.md` for the schema and the validation command. Then:
 
-```bash
-uv run --directory ${CLAUDE_PLUGIN_ROOT} python -c "from h2h_advisor.config import load_config; from h2h_advisor.analysis.build import build_from_config; c = load_config(); [build_from_config(lc.build) for lc in c.leagues.values()]; print('config OK:', sorted(c.leagues))"
-```
+1. **Merge** into the existing file: keep every key and league already there; add or change only
+   what the user agreed to.
+2. Show the **full resulting file** and its path, and ask for a yes.
+3. On a yes: `cp config.toml config.toml.bak` if the file exists, `mkdir -p` the folder, write it,
+   and run the validation command. On an error, fix it and show the file again.
 
-Schema the loader accepts (unknown keys in a league table are an error):
+Without Bash (Claude Desktop chat), show the file and the path to save it at; the user saves it.
 
-```toml
-[global]
-never_drop = ["Victor Wembanyama"]   # a list, never a string; merged into every league
-                                     # (season-long only: "keep him for now" is a note, add_note)
-# drop_margin = 0.25                 # ROS value margin above the best free agent for the drop pool
-# light_day_max_games = 4            # days with this many NBA games or fewer are "light"
+## Check
 
-[league."<yahoo league id>"]         # the id from list_leagues, quoted
-never_drop = []                      # added to the global list for this league
-# stream_slots = 5                   # drop pool = bottom 5 by ROS value
-# max_adds = 7                       # only used if the settings page gives no max adds
-# bbm_league_id = "1234"             # BBM league option value when the name match fails
-# build = { strong = ["FT_PCT", "TPM"], punt = ["FG_PCT", "TO"], weak = ["REB"] }
+The server reads the config once, on its first call, so it needs a reconnect after a write:
+`/mcp` → h2h-advisor → reconnect in Claude Code; quit and reopen Claude Desktop. Ask the user to
+do it and to say when they are done.
 
-# [limits]                           # daily page-load caps and the delay between loads
-# yahoo_daily_pages = 250
-# bbm_daily_pages = 80
-# delay_min_s = 4.0
-# delay_max_s = 9.0
+Then check in proportion to the change:
 
-# [ttl_s]                            # cache lifetimes in seconds: settings, matchup, roster,
-# matchup = 1200                     # free_agents, bbm_day, bbm_week, bbm_ros
+- First run: `daily_brief(leagues="all")`, presented as streaming-advisor's all-leagues status
+  brief (status per league, adds left, data age, every notice). Say first that it may take a few
+  minutes.
+- One league's BBM pin: `get_free_agents(league, limit=1)`; no "set bbm_league_id" notice means
+  it took.
+- Never-drop, build or stream slots: `analyze_week(league)` shows the build in use; nothing more
+  is needed for a never-drop edit beyond a valid config.
+- Login only: Verify above is the check.
 
-# [aliases]                          # player name as one site spells it = canonical name
-# "Nic Claxton" = "Nicolas Claxton"
-```
-
-Category names: `FG_PCT`, `FT_PCT`, `TPM`, `PTS`, `REB`, `AST`, `STL`, `BLK`, `TO`.
-
-The running MCP server read the config when it started: ask the user to reconnect it (`/mcp` →
-h2h-advisor → reconnect, or restart Claude) so the new file is used.
-
-## 7. Smoke test
-
-`daily_brief(leagues="all")`, presented as the all-leagues brief from the streaming-advisor skill
-(status per league, adds left, data age, every notice). Any remaining "set bbm_league_id" or
-"needs login" notice means the matching step above is not done yet.
+A remaining "needs login" or "set bbm_league_id" notice points to the step still undone. End with
+a short summary: what changed, what was left as default, anything still open.

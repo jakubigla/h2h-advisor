@@ -1,0 +1,5 @@
+{"data": [
+  {"league_id": "11111", "name": "Hoops League A", "team_id": "9", "team_name": "Night Owls"},
+  {"league_id": "22222", "name": "1 Liga H2H Budget", "team_id": "6", "team_name": "Night Owls"},
+  {"league_id": "33333", "name": "Big Men League", "team_id": "7", "team_name": "Night Owls"}],
+ "ages": {"yahoo:leagues": {"fetched_at": "2026-11-26T07:41:12+00:00", "stale": false}}, "notices": []}
