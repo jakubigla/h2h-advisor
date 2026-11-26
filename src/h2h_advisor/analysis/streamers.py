@@ -43,6 +43,12 @@ PLAN_FREE_GAIN = 0.01  # a move that gives up none (the drop would not have star
 # drop, twice that when the drop gives up games.
 PLAN_MIN_GAIN_CATS = 0.10
 PLAN_FREE_GAIN_CATS = 0.05
+# A swap that drops a streamer added earlier in the plan costs nothing past this week: his
+# only value is the games given up, already netted out of the gain, and adds left unused are
+# lost when the week ends. Such a swap (a C for a SF on Saturday, for REB and BLK) needs only
+# a clearly positive gain, not the bar that protects a roster player.
+PLAN_SPARE_GAIN = 0.005
+PLAN_SPARE_GAIN_CATS = 0.02
 PLAN_SAFE = 0.90  # one-win leagues: at or above this the week is safe, no moves worth a drop
 ACTIVATION_POOL = 4  # weakest roster players (by ROS) considered to make room for an IL return
 FOLLOW_UP_OPTIONS = 5
@@ -539,9 +545,9 @@ def plan_adds(
     objective: Literal["categories", "one_win", "target"] = (
         "target" if target_cats is not None else base.objective
     )
-    min_gain, free_gain = (
-        (PLAN_MIN_GAIN_CATS, PLAN_FREE_GAIN_CATS) if objective == "categories"
-        else (PLAN_MIN_GAIN, PLAN_FREE_GAIN)
+    min_gain, free_gain, spare_gain = (
+        (PLAN_MIN_GAIN_CATS, PLAN_FREE_GAIN_CATS, PLAN_SPARE_GAIN_CATS) if objective == "categories"
+        else (PLAN_MIN_GAIN, PLAN_FREE_GAIN, PLAN_SPARE_GAIN)
     )
 
     def score(a: WeekAnalysis) -> float:
@@ -627,7 +633,11 @@ def plan_adds(
                     new = analyze_week(swapped)
                     gain = score(new) - score(state.analysis)
                     gives_up = any(drop.player.key in starting[d] for d in window)
-                    if gain < (min_gain if gives_up else free_gain):
+                    if drop.player.key in state.added_on:
+                        bar = spare_gain  # this week's streamer: nothing lost past the week
+                    else:
+                        bar = min_gain if gives_up else free_gain
+                    if gain < bar:
                         continue  # not worth what the drop costs
                     options.append(((score(new), day.toordinal()), new, swapped, f, drop, day, starting))
         options.sort(key=lambda o: o[0], reverse=True)  # later wins a tie: more information

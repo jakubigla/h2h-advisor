@@ -992,6 +992,31 @@ def test_categories_plan_chains_the_adds_though_the_matchup_is_won():
     assert all(m.gain >= 0.05 for m in plan.moves)  # gains are in expected categories
 
 
+@pytest.mark.parametrize(
+    ("scoring_type", "bar"), [("one_win", "PLAN_MIN_GAIN"), ("categories", "PLAN_MIN_GAIN_CATS")]
+)
+def test_a_streamer_is_swapped_for_a_better_fit_on_a_day_he_plays(monkeypatch, scoring_type, bar):
+    # "early" (a weak streamer) plays days 0-2; "late" (a better fit for the chase) only day 2.
+    # Swapping early for late on day 2 gives up early's day-2 game, but early is this week's
+    # streamer: his only value is that game, already netted out of the gain, and the add would
+    # otherwise go unused. The roster-player bar must not block it (a C for a SF on Saturday).
+    monkeypatch.setattr(streamers, bar, 99.0)  # a drop that gives up a roster player's game: never
+    ctx, fas, pool = streaming_ctx(
+        {"early": [day(0), day(1), day(2)], "late": [day(2)]},
+        fa_per_game={"early": StatLine(ast=2.0), "late": StatLine(ast=12.0)},
+        fa_values={"early": 2.0, "late": 1.5},
+        # one-win: an open week (a locked one is left alone); categories: only AST in play
+        **({} if scoring_type == "one_win" else {"my_totals": _LOCKED, "opp_totals": StatLine(ast=50)}),
+        scoring_type=scoring_type,
+    )
+    plan = plan_adds(ctx, fas, pool)
+    assert [(m.on, m.add.key, m.drop.key) for m in plan.moves] == [
+        (day(0), "early", "D"),
+        (day(2), "late", "early"),
+    ]
+    assert plan.moves[1].drop_days_given_up == [day(2)]
+
+
 def test_categories_plan_gives_no_credit_for_a_punted_category():
     ctx, fas, pool = _chain_ctx()
     plan = plan_adds(ctx, fas, pool, build=Build(punt=frozenset({C.AST}), source="pinned"))
