@@ -36,8 +36,10 @@ from h2h_advisor.sources.schedule import Schedule
 
 MAX_POOL = 3  # most players a streaming move may drop, by default
 PLAN_CANDIDATES = 30  # free agents kept for the search, by what they add
-PLAN_BEAM = 3  # partial plans kept at each step of the search
-PLAN_EXPAND = 4  # next moves tried from each of them
+# Wide enough that near-equal moves (six centres for one spot on one day) do not crowd out
+# the first step of a longer chain, which often ranks below all of them.
+PLAN_BEAM = 12  # partial plans kept at each step of the search
+PLAN_EXPAND = 12  # next moves tried from each of them
 PLAN_MIN_GAIN = 0.03  # a move that gives up games must add this much win probability
 PLAN_FREE_GAIN = 0.01  # a move that gives up none (the drop would not have started) only this much
 # Categories leagues plan on expected categories won (every category counts in the
