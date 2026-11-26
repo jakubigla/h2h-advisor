@@ -19,9 +19,12 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 from zoneinfo import ZoneInfo
 
+from h2h_advisor import notes as notes_store
+from h2h_advisor import paths
 from h2h_advisor.analysis.build import (
     Build,
     at_risk_strong,
@@ -269,8 +272,10 @@ class Advisor:
         yahoo_source: Callable[..., YahooSource] = YahooSource,
         bbm_source: Callable[..., BbmSource] = BbmSource,
         espn_source: EspnSource | None = None,
+        notes_file: Path | None = None,
     ) -> None:
         self._config = config
+        self._notes_file = notes_file  # None: paths.notes_file(), resolved per call
         self._cache = cache
         self._session_factory = session_factory
         self._clock = clock
@@ -417,6 +422,45 @@ class Advisor:
         }
         return Envelope(data, [], [])
 
+    # -- public: notes ----------------------------------------------------------------
+
+    def add_note(
+        self,
+        kind: str,
+        player: str,
+        league: str = notes_store.ALL_LEAGUES,
+        reason: str = "",
+        until: date | None = None,
+    ) -> Envelope:
+        """Remember the user's guidance on a player until `until` (default two weeks)."""
+        with self._calling() as call:
+            lid = (
+                notes_store.ALL_LEAGUES
+                if league.strip().casefold() == notes_store.ALL_LEAGUES
+                else self._resolve(call, league)
+            )
+            note = notes_store.add(
+                self._notes_path(), kind, player, lid, reason, self._today(), until
+            )
+            return self._envelope(
+                call, {"note": note, "active": self._notes(None)}
+            )
+
+    def list_notes(self, league: str | None = None) -> Envelope:
+        """Notes that count today, for one league (plus the all-leagues ones) or all."""
+        with self._calling() as call:
+            lid = None if league is None else self._resolve(call, league)
+            return self._envelope(call, {"active": self._notes(lid)})
+
+    def remove_note(self, note_id: int) -> Envelope:
+        with self._calling() as call:
+            gone = notes_store.remove(self._notes_path(), note_id)
+            if gone is None:
+                raise ValueError(f"no note with id {note_id}")
+            return self._envelope(
+                call, {"removed": gone, "active": self._notes(None)}
+            )
+
     # -- public: analysis -------------------------------------------------------------
 
     def analyze_week(self, league: str, refresh: bool = False) -> Envelope:
@@ -473,6 +517,8 @@ class Advisor:
             plan = plan_adds_ctx(
                 week.ctx, fas, self._pool(lid, week, fas), self._config.drop_margin,
                 target_cats=target_cats,
+                build=self._build_for(call, lid, week),
+                drop_first=self._drop_first(lid, week.ctx.my_roster),
             )
             claims = _claims(fas, [m.add.key for m in plan.moves], week.settings)
             return self._envelope(call, {"plan": plan, "claims": claims})
@@ -1171,8 +1217,14 @@ class Advisor:
             active_days=active,
         )
         ros_games = {key: row.games for key, row in ros_rows.items()}
+        ros_cats = _ros_cats(ros, to_yahoo)
+        # Who is a throwaway depends on the build: BBM's overall value counts punted
+        # categories, so a shot-blocker without points looks cheaper than he is and a
+        # scorer on a punt-PTS team looks dearer. Drops are ranked on build value.
+        punt = self._build(call, lid, settings, matchup, mine, ros_cats).punt
+        ctx = replace(ctx, ros_values=_build_ros(values, ros_cats, punt))
         # A questionable player in an IL slot is coming back: count him (and the drop).
-        never_drop = self._config.never_drop_for(lid)
+        never_drop = self._protected(lid)
         proj_minutes = {
             key: row.projection.minutes
             for key, row in ros_rows.items()
@@ -1189,7 +1241,6 @@ class Advisor:
             il_skipped, il_moves, with_il = il_moves, [], ctx
         ctx = with_il
         ctx, _ = activate_il(ctx, "opponent")
-        ros_cats = _ros_cats(ros, to_yahoo)
         # Who starts when more players have a game than there are slots follows the
         # build: a punted category (or a strong one already safe) must not decide it.
         build = self._build(call, lid, settings, matchup, ctx.my_roster, ros_cats)
@@ -1323,10 +1374,42 @@ class Advisor:
             week.ctx.my_roster,
             week.ctx.ros_values,
             fas,
-            never_drop=self._config.never_drop_for(lid),
+            never_drop=self._protected(lid),
             margin=self._config.drop_margin,
             stream_slots=league_cfg.stream_slots if league_cfg else None,
             keep=frozenset(week.rotation),
+            drop_first=self._drop_first(lid, week.ctx.my_roster),
+        )
+
+    # -- notes: the user's short-lived guidance ---------------------------------------
+
+    def _notes_path(self) -> Path:
+        return self._notes_file or paths.notes_file()
+
+    def _notes(self, lid: str | None = None) -> list[notes_store.Note]:
+        """Notes that count today; an unreadable file is a notice, never a failed brief."""
+        try:
+            return notes_store.active(self._notes_path(), self._today(), lid)
+        except ValueError as exc:
+            if self._call is not None:
+                self._call.notice(f"notes ignored: {exc}")
+            return []
+
+    def _protected(self, lid: str) -> set[str]:
+        """Names never offered as a drop: config `never_drop` plus "keep" notes.
+
+        A "drop_first" note on the same name wins: it is the user's latest word.
+        """
+        active = self._notes(lid)
+        keep = {n.name_key for n in active if n.kind == "keep"}
+        dropping = {n.name_key for n in active if n.kind == "drop_first"}
+        return (self._config.never_drop_for(lid) | keep) - dropping
+
+    def _drop_first(self, lid: str, roster: list[RosterEntry]) -> frozenset[str]:
+        """Player keys on `roster` the user said to drop first."""
+        names = {n.name_key for n in self._notes(lid) if n.kind == "drop_first"}
+        return frozenset(
+            e.player.key for e in roster if normalize_name(e.player.name) in names
         )
 
     def _streamers(
@@ -1393,7 +1476,9 @@ class Advisor:
             )
             upgrades = self._upgrades(lid, week, fas, build, 5)
             brief["potential"] = plan_adds_ctx(
-                week.ctx, fas, self._pool(lid, week, fas), self._config.drop_margin
+                week.ctx, fas, self._pool(lid, week, fas), self._config.drop_margin,
+                build=build,
+                drop_first=self._drop_first(lid, week.ctx.my_roster),
             )
             adds = [*_option_adds(options), *(u.add.key for u in upgrades)]
             brief.update(
@@ -1478,6 +1563,11 @@ class Advisor:
                 f"and {dropped.name} dropped (weakest ROS): he counts in every projection here; "
                 "if he does not play, the outlook is lower"
             )
+        notes = self._notes(lid)
+        if notes:
+            facts.append("Your notes (the engine follows them): " + "; ".join(
+                _note_text(n, ctx.my_roster, self._today()) for n in notes
+            ))
         mine = _usable_games(ctx, ctx.my_roster, ctx.active_days)
         theirs = _usable_games(ctx, ctx.opp_roster, ctx.active_days)
         facts.append(
@@ -1604,6 +1694,32 @@ def _ros_cats(
         for key, row in _rows_by_key(ros.rows, to_yahoo or {}).items()
         if row.projection.cat_values
     }
+
+
+def _note_text(note: notes_store.Note, roster: list[RosterEntry], today: date) -> str:
+    action = "keep" if note.kind == "keep" else "drop first"
+    on_roster = any(normalize_name(e.player.name) == note.name_key for e in roster)
+    ends = "ends today" if note.until == today else f"until {note.until.isoformat()}"
+    parts = [ends, *([note.reason] if note.reason else [])]
+    if not on_roster:
+        parts.append("not on your roster")
+    return f"#{note.id} {action} {note.player} ({', '.join(parts)})"
+
+
+def _build_ros(
+    values: dict[str, float],
+    ros_cats: dict[str, dict[Category, float]],
+    punt: frozenset[Category],
+) -> dict[str, float]:
+    """Rest-of-season value for this build: the mean of a player's BBM category values
+    over the categories not punted (BBM's own Value is the mean over all nine, so the
+    scale, and `drop_margin`, stay the same). No category values: his plain value.
+    """
+    out: dict[str, float] = {}
+    for key, value in values.items():
+        cats = {c: v for c, v in ros_cats.get(key, {}).items() if c not in punt}
+        out[key] = sum(cats.values()) / len(cats) if cats else value
+    return out
 
 
 def _build_values(

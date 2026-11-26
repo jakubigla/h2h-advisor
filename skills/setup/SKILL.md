@@ -91,6 +91,7 @@ Schema the loader accepts (unknown keys in a league table are an error):
 ```toml
 [global]
 never_drop = ["Victor Wembanyama"]   # a list, never a string; merged into every league
+                                     # (season-long only: "keep him for now" is a note, add_note)
 # drop_margin = 0.25                 # ROS value margin above the best free agent for the drop pool
 # light_day_max_games = 4            # days with this many NBA games or fewer are "light"
 

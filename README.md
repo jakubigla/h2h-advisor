@@ -205,7 +205,8 @@ categories it moves and the adds you would have left. You make the move in Yahoo
 
 ## Tools
 
-The MCP server exposes 13 tools. All of them are read-only.
+The MCP server exposes 16 tools. Thirteen are read-only; the three note tools write only a
+local notes file (your short-lived guidance, see Configuration). None changes anything on Yahoo.
 
 | Tool | What it returns |
 |---|---|
@@ -223,6 +224,9 @@ The MCP server exposes 13 tools. All of them are read-only.
 | `get_history` | Results of this season's earlier matchup weeks |
 | `daily_brief` | Status or moves for one or all leagues in one call |
 | `status` | Login state, page loads against the daily caps, cache ages, blocked requests |
+| `add_note` | Remember guidance on a player until a date: `keep` (never a drop) or `drop_first` |
+| `list_notes` | The notes that still count today |
+| `remove_note` | Forget one note |
 
 ## How it works
 
@@ -282,6 +286,18 @@ Category names: `FG_PCT`, `FT_PCT`, `TPM`, `PTS`, `REB`, `AST`, `STL`, `BLK`, `T
 in a league table is optional, and an unknown key there (a typo, say) makes loading fail with an
 error. The server reads the config when it starts: after a change,
 reconnect it (`/mcp` in Claude Code) or restart Claude Desktop.
+
+`never_drop` is for players protected all season. Guidance that goes stale ("keep the backup big
+while the starter is out", "the bench wing is useless, drop him first") is a **note**: tell Claude in conversation and it
+stores one with `add_note`. A `keep` note takes the player off the drop list; a `drop_first` note
+offers him first, even above replacement level. Each note has a last day (two weeks by default,
+the week's end for "this week") and stops counting after it. Notes live in
+`~/.local/share/h2h-advisor/notes.json`, are read on every call (no reconnect needed), and the
+brief lists the active ones. `list_notes` and `remove_note` show and forget them.
+
+Drop candidates are ranked by rest-of-season value **for the league's build**: the mean of
+Basketball Monster's category values over the categories not punted. A shot-blocker who scores
+little is not a throwaway on a punt-points team.
 
 </details>
 

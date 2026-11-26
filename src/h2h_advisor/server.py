@@ -1,8 +1,9 @@
-"""MCP server: the Advisor service as thirteen read-only tools over stdio.
+"""MCP server: the Advisor service as thirteen read-only tools and three note tools over stdio.
 
 A thin layer. Each tool forwards its parameters to one ``Advisor`` method and
 returns the resulting ``Envelope`` as JSON (dates ISO, enums by value). Nothing here
-can navigate, click, type or fetch an arbitrary URL. The Advisor, and with it the
+can navigate, click, type or fetch an arbitrary URL. The note tools write only the
+local notes file (the user's short-lived guidance), never Yahoo or Basketball Monster. The Advisor, and with it the
 cache and browser plumbing, is built on the first tool call; starting the server
 opens no browser and touches no network.
 """
@@ -42,12 +43,20 @@ INSTRUCTIONS = (
     "login. No tool can log in. 'set bbm_league_id for <league>' "
     "means the Basketball Monster league could not be matched by name: offer "
     "setup to pin it in config. "
-    "Never claim a move was made; only recommend it."
+    "Never claim a move was made; only recommend it. "
+    "When the user gives guidance on a player that should outlast this answer "
+    "('keep him for now', 'drop him first'), store it with add_note: notes expire "
+    "(two weeks unless until is given), the analysis follows the active ones, and "
+    "the note tools write only a local file."
 )
 
 Horizon = Literal["today", "rest_of_week"]
 READ_ONLY = (
     " It is read-only and never changes anything on Yahoo or Basketball Monster."
+)
+LOCAL_ONLY = (
+    " It writes only the local notes file and never changes anything on Yahoo or "
+    "Basketball Monster."
 )
 
 mcp = MCPServer("h2h-advisor", instructions=INSTRUCTIONS)
@@ -311,6 +320,68 @@ def league_progress(ctx: Context | None) -> Callable[[int, int, str], None]:
 )
 def status() -> dict[str, Any]:
     return _respond("status")
+
+
+def _note_tool(title: str, description: str, *, idempotent: bool) -> Any:
+    return mcp.tool(
+        title=title,
+        description=description + LOCAL_ONLY,
+        annotations=ToolAnnotations(
+            title=title,
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=idempotent,
+            open_world_hint=False,
+        ),
+    )
+
+
+@_note_tool(
+    "Add note",
+    "Remember the user's guidance on one player so every later analysis follows it. "
+    "kind 'keep': never offered as a drop (e.g. 'keep him while the starter is out'); "
+    "'drop_first': offered first as a drop, even above replacement level or playing "
+    "more minutes than projected ('he is useless'). league is a league name or id, "
+    "or 'all'. until (YYYY-MM-DD) is the last day it counts; default two weeks, use "
+    "the matchup week's end for 'this week'. A new note on the same player and league "
+    "replaces the old one.",
+    idempotent=False,
+)
+def add_note(
+    kind: Literal["keep", "drop_first"],
+    player: str,
+    league: str = "all",
+    reason: str = "",
+    until: str | None = None,
+) -> dict[str, Any]:
+    return _respond(
+        "add_note",
+        kind=kind,
+        player=player,
+        league=league,
+        reason=reason,
+        until=None if until is None else _parse_date(until, "until"),
+    )
+
+
+@_note_tool(
+    "List notes",
+    "The user's notes that still count today, for one league (with the all-leagues "
+    "ones) or, without league, every league.",
+    idempotent=True,
+)
+def list_notes(league: str | None = None) -> dict[str, Any]:
+    return _respond("list_notes", league=league)
+
+
+@_note_tool(
+    "Remove note",
+    "Forget one note by its id (from add_note or list_notes), when the user's "
+    "guidance no longer holds.",
+    idempotent=True,
+)
+def remove_note(note_id: int) -> dict[str, Any]:
+    return _respond("remove_note", note_id=note_id)
 
 
 def run() -> None:

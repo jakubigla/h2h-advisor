@@ -195,6 +195,26 @@ def test_kept_rotation_player_is_not_in_the_pool():
     assert [e.player.key for e in pool] == ["bench"]
 
 
+def test_drop_first_player_leads_the_pool_whatever_his_value_or_minutes():
+    # The user said "drop him first": above replacement level and a kept rotation
+    # player by minutes, he is still offered, ahead of the usual throwaways.
+    roster = [entry("cheap", "AAA"), entry("wolf", "BBB"), entry("good", "CCC")]
+    ros = {"cheap": -1.0, "wolf": 5.0, "good": 9.0, "f": 0.0}
+    pool = drop_pool(
+        roster, ros, [fa("f", "FFF")], set(), 0.5, None,
+        keep=frozenset({"wolf"}), drop_first=frozenset({"wolf"}),
+    )
+    assert [e.player.key for e in pool] == ["wolf", "cheap"]
+    slots = drop_pool(roster, ros, [fa("f", "FFF")], set(), 0.5, stream_slots=1, drop_first=frozenset({"wolf"}))
+    assert [e.player.key for e in slots] == ["wolf"]
+
+
+def test_drop_first_never_offers_an_il_slot():
+    roster = [entry("hurt", "AAA", slot="IL"), entry("ok", "BBB")]
+    pool = drop_pool(roster, {"hurt": -9.0, "ok": -1.0}, [], set(), 0.5, None, drop_first=frozenset({"hurt"}))
+    assert [e.player.key for e in pool] == ["ok"]
+
+
 def test_il_players_not_in_pool():
     roster = [entry("hurt", "AAA", slot="IL"), entry("hurt2", "AAA", slot="IL+"), entry("ok", "BBB")]
     ros = {"hurt": -10.0, "hurt2": -9.0, "ok": 30.0}
@@ -908,14 +928,62 @@ def test_projected_rest_lists_players_who_sit_on_a_game_day():
     assert [(p.key, d) for p, d in sitting] == [("M1", [day(3)])]
 
 
-def test_plan_leaves_a_safe_week_alone():
+def test_plan_leaves_a_safe_one_win_week_alone():
     ctx, fas, pool = streaming_ctx(
         {"early": [day(0), day(1), day(2)]},
         my_totals=StatLine(fgm=900, fga=1200, ftm=500, fta=600, tpm=300, pts=3000, reb=1200, ast=900, stl=400, blk=300),
         fa_values={"early": 2.0},
+        scoring_type="one_win",
     )
     plan = plan_adds(ctx, fas, pool)
     assert plan.moves == [] and "worth a drop" in plan.reason
+    assert plan.objective == "one_win"
+
+
+# Every category but AST is locked (FT_PCT and TO sit near a coin flip and no add moves
+# them); AST trails. "early" plays day 0-1, "late" day 3-4, both pure assists.
+_LOCKED = StatLine(fgm=900, fga=1200, ftm=500, fta=600, tpm=300, pts=3000, reb=1200, ast=40, stl=400, blk=300)
+_AST_LEAD = StatLine(ast=46)
+
+
+def _chain_ctx(scoring_type="categories"):
+    return streaming_ctx(
+        {"early": [day(0), day(1)], "late": [day(3), day(4)]},
+        fa_per_game={"early": StatLine(ast=6.0), "late": StatLine(ast=6.0)},
+        fa_values={"early": 2.0, "late": 1.5},
+        my_totals=_LOCKED,
+        opp_totals=_AST_LEAD,
+        scoring_type=scoring_type,
+    )
+
+
+def test_categories_plan_chains_the_adds_though_the_matchup_is_won():
+    # Every category counts in a categories league: a won matchup still has AST to
+    # take, and the adds left are chained - today's add, then a swap once he has played.
+    ctx, fas, pool = _chain_ctx()
+    plan = plan_adds(ctx, fas, pool)
+    assert plan.objective == "categories" and plan.base_win_prob >= 0.9
+    assert [(m.on, m.add.key, m.drop.key) for m in plan.moves] == [
+        (day(0), "early", "D"),
+        (day(3), "late", "early"),
+    ]
+    assert plan.expected_cats_won > plan.base_expected_cats + 0.5
+    assert all(m.gain >= 0.05 for m in plan.moves)  # gains are in expected categories
+
+
+def test_categories_plan_gives_no_credit_for_a_punted_category():
+    ctx, fas, pool = _chain_ctx()
+    plan = plan_adds(ctx, fas, pool, build=Build(punt=frozenset({C.AST}), source="pinned"))
+    assert plan.moves == []
+
+
+def test_plan_drops_a_player_above_replacement_only_when_the_user_chose_him():
+    ctx, fas, pool = _chain_ctx()
+    ctx = replace(ctx, ros_values={"D": 5.0, "early": 0.0, "late": 0.0})  # D is no throwaway
+    assert plan_adds(ctx, fas, pool).moves == []
+    chosen = plan_adds(ctx, fas, pool, drop_first=frozenset({"D"}))
+    assert chosen.moves and chosen.moves[0].drop.key == "D"
+    assert chosen.moves[0].ros_cost_flag  # still flagged: the cost is real, the user accepted it
 
 
 def test_activation_never_drops_a_kept_rotation_player():
@@ -934,9 +1002,14 @@ def test_plan_scores_a_lower_valued_player_who_plays_on_the_day():
     assert [m.add.key for m in plan.moves] == ["modest"]
 
 
-def test_a_free_drop_needs_a_smaller_gain_than_a_costly_one(monkeypatch):
-    monkeypatch.setattr(streamers, "PLAN_MIN_GAIN", 1.0)  # impossible: a costly drop never qualifies
-    ctx, fas, pool = streaming_ctx({"mild": [day(0), day(1), day(2)]}, fa_values={"mild": 1.0})
+@pytest.mark.parametrize(
+    ("scoring_type", "bar"), [("one_win", "PLAN_MIN_GAIN"), ("categories", "PLAN_MIN_GAIN_CATS")]
+)
+def test_a_free_drop_needs_a_smaller_gain_than_a_costly_one(monkeypatch, scoring_type, bar):
+    monkeypatch.setattr(streamers, bar, 99.0)  # impossible: a costly drop never qualifies
+    ctx, fas, pool = streaming_ctx(
+        {"mild": [day(0), day(1), day(2)]}, fa_values={"mild": 1.0}, scoring_type=scoring_type
+    )
     free = plan_adds(ctx, fas, pool)  # the pool is D, who never plays: his drop is free
     assert [m.drop.key for m in free.moves] == ["D"]
     costly = plan_adds(ctx, fas, [ctx.my_roster[0]])  # M1 starts every day: dropping him costs games
