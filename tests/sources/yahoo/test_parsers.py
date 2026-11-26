@@ -243,6 +243,15 @@ def test_parse_roster():
     assert roster[9].player.name == "Y. Konan Niederhäuser"
 
 
+def test_parse_roster_skips_an_empty_slot():
+    # Yahoo labels an unfilled slot "(Empty)" in a div.emptyplayer, with no name link.
+    roster = parsers.parse_roster(load("team_57243_empty_slot.html"))
+    assert len(roster) == 14
+    assert "G" not in [e.slot for e in roster]
+    assert roster[0].player.name == "Darius Acuff Jr."
+    assert roster[-1].slot == "IL"
+
+
 def test_parse_free_agents():
     fas = parsers.parse_free_agents(load("players_51347.html"), TODAY)
     assert len(fas) == 25
