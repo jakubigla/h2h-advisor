@@ -102,6 +102,12 @@ group it belongs to (or a new group). Keep it to a line or two; put lookups in `
   infer open or full days from the number of teams playing.
 - **When the user says a player is taken or free, believe them over the list** and drop him from
   (or add him to) the answer. Yahoo's rosters decide; a list cached up to an hour can be behind.
+- **With more than one add left, compare candidates by the plan each one starts, never by their
+  single-add gains.** A single gain counts every game the add plays, so a two-game player beats a
+  one-game player whose spot is refilled the next day: Nesmith +0.17 (Fri, Sat) against Santos
+  +0.10 (Fri) is 4.69 against 4.68 once Saturday's swap is counted. Show the totals
+  (`expected_cats_won` or `matchup_win_prob` after the whole chain) side by side; game counts and
+  back-to-backs decide only when the adds run out before the days do.
 - **Never defend a skipped swap by "it gives up his game", "it's small" or "it was scored with
   another add".** The gain is already net of the game given up. When the user proposes a swap
   the plan lacks, score it before answering.
