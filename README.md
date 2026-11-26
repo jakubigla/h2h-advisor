@@ -341,3 +341,6 @@ uv run ruff check src tests
 ```
 
 No test touches a live Yahoo or Basketball Monster site.
+
+Working on it with a coding agent? Start with [`AGENTS.md`](AGENTS.md). Claude Code also loads
+`CLAUDE.md` and `.claude/`: `/release`, `/fixture`, a `guard-reviewer` subagent and a ruff hook.
