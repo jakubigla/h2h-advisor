@@ -1,0 +1,43 @@
+{
+ "data": {"leagues": {
+  "1001": {"name": "Hoops League A", "analysis": {
+     "objective": "one_win", "matchup_win_prob": 0.22, "expected_cats_won": 3.6,
+     "targets": ["STL","PTS","FT_PCT","AST","REB"], "build": {"punt": ["TO"], "strong": [], "weak": []}, "at_risk_strong": [],
+     "analysis": {"opponent": "Rim Rockers", "adds_left": 3, "days_left": ["2026-11-26","2026-11-27","2026-11-28","2026-11-29"],
+      "categories": [
+       {"category":"FG_PCT","status":"likely_loss","win_prob":0.18,"my_now":0.452,"opp_now":0.489,"my_proj":0.455,"opp_proj":0.484},
+       {"category":"FT_PCT","status":"swing","win_prob":0.43,"my_now":0.781,"opp_now":0.79,"my_proj":0.784,"opp_proj":0.789},
+       {"category":"TPM","status":"likely_loss","win_prob":0.21,"my_now":31,"opp_now":40,"my_proj":52,"opp_proj":61},
+       {"category":"PTS","status":"swing","win_prob":0.48,"my_now":402,"opp_now":398,"my_proj":690,"opp_proj":694},
+       {"category":"REB","status":"likely_win","win_prob":0.74,"my_now":180,"opp_now":161,"my_proj":301,"opp_proj":280},
+       {"category":"AST","status":"swing","win_prob":0.43,"my_now":88,"opp_now":91,"my_proj":150,"opp_proj":154},
+       {"category":"STL","status":"likely_win","win_prob":0.71,"my_now":30,"opp_now":22,"my_proj":48,"opp_proj":41},
+       {"category":"BLK","status":"likely_loss","win_prob":0.27,"my_now":17,"opp_now":24,"my_proj":29,"opp_proj":36},
+       {"category":"TO","status":"locked_loss","win_prob":0.03,"my_now":70,"opp_now":51,"my_proj":118,"opp_proj":90}]}},
+   "potential": {"matchup_win_prob": 0.41, "adds_used": 3, "moves": [
+       {"on":"2026-11-27","add":"Javon Small","drop":"Bench Wing One","usable_days":["2026-11-27","2026-11-28"],"gain":0.09},
+       {"on":"2026-11-28","add":"Ochai Agbaji","drop":"Javon Small","usable_days":["2026-11-29"],"gain":0.06},
+       {"on":"2026-11-29","add":"Kris Dunn","drop":"Bench Wing Two","usable_days":["2026-11-29"],"gain":0.04}]},
+   "streamers": [{"add":{"name":"Javon Small","nba_team":"MEM","positions":["PG"],"status":null},"drop":{"name":"Bench Wing One"},"usable_days":["2026-11-27","2026-11-28"],"slot_by_day":{"2026-11-27":"PG","2026-11-28":"Util"},"delta_objective":0.065,"adds_left_after":2,"ros_cost_flag":false,"light_days":[]}],
+   "streamer_reason": null,
+   "upgrades": [{"add":{"name":"Alex Caruso","nba_team":"OKC"},"drop":{"name":"Jalen Green"},"ros_value_gain":1.31,"ros_games":47,"key_categories":["STL","FG_PCT"],"games_this_week":2}],
+   "claims": {},
+   "facts": ["No NBA games: 2026-11-26","Close categories: FT_PCT (43%), PTS (48%), AST (43%)","Usable games left: me 24, opponent 29 (-5)"]},
+  "1002": {"name": "Hoops League B", "analysis": {
+     "objective": "categories", "matchup_win_prob": 0.95, "expected_cats_won": 6.2,
+     "targets": null, "build": {"punt": [], "strong": ["BLK"], "weak": []}, "at_risk_strong": [],
+     "analysis": {"opponent": "Fast Breakers", "adds_left": 2, "days_left": ["2026-11-26","2026-11-27","2026-11-28","2026-11-29"],
+      "categories": [
+       {"category":"FG_PCT","status":"likely_win","win_prob":0.8},{"category":"FT_PCT","status":"likely_win","win_prob":0.77},
+       {"category":"TPM","status":"swing","win_prob":0.55},{"category":"PTS","status":"likely_win","win_prob":0.85},
+       {"category":"REB","status":"locked_win","win_prob":0.98},{"category":"AST","status":"swing","win_prob":0.51},
+       {"category":"STL","status":"likely_loss","win_prob":0.3},{"category":"BLK","status":"locked_win","win_prob":0.97},
+       {"category":"TO","status":"likely_win","win_prob":0.7}]}},
+   "potential": {"matchup_win_prob": 0.96, "adds_used": 0, "moves": []},
+   "streamers": [], "streamer_reason": "no move improves this week's outlook",
+   "upgrades": [], "claims": {},
+   "facts": ["No NBA games: 2026-11-26","Close categories: AST (51%)","Usable games left: me 27, opponent 23 (+4)"]}
+ }},
+ "ages": {"yahoo": {"fetched_at": "2026-11-26T09:02:00+01:00", "stale": false}, "bbm": {"fetched_at": "2026-11-25T18:40:00+01:00", "stale": true}},
+ "notices": ["set bbm_league_id for Hoops League B in config (BBM leagues: 1. Some Roto League (Yahoo!), _2. Hoops Lg B (Yahoo!))"]
+}

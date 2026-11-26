@@ -1,0 +1,21 @@
+{
+ "data": {"leagues": {
+  "1003": {"name": "Hoops League C", "analysis": {
+     "objective": "categories", "matchup_win_prob": 0.38, "expected_cats_won": 4.1,
+     "targets": null, "build": {"punt": [], "strong": [], "weak": []}, "at_risk_strong": [],
+     "analysis": {"opponent": "Paint Kings", "adds_left": 3, "days_left": ["2026-11-27","2026-11-28","2026-11-29"],
+      "categories": [
+       {"category":"FG_PCT","status":"swing","win_prob":0.49},{"category":"FT_PCT","status":"likely_win","win_prob":0.72},
+       {"category":"TPM","status":"swing","win_prob":0.46},{"category":"PTS","status":"likely_loss","win_prob":0.3},
+       {"category":"REB","status":"likely_loss","win_prob":0.28},{"category":"AST","status":"swing","win_prob":0.5},
+       {"category":"STL","status":"swing","win_prob":0.45},{"category":"BLK","status":"likely_win","win_prob":0.7},
+       {"category":"TO","status":"likely_loss","win_prob":0.2}]}},
+   "potential": {"matchup_win_prob": 0.38, "adds_used": 0, "moves": []},
+   "streamers": [], "streamer_reason": "drop pool is empty",
+   "upgrades": [], "claims": {},
+   "facts": ["Kept off the drop list, playing more than projected: Bench Big","Usable games left: me 17, opponent 22 (-5)","Close categories: FG_PCT (49%), AST (50%)"]}
+ }},
+ "roster_note": "Roster includes Jimmy Butler (status O, expected back next week, top-30 rest-of-season value) and Bench Big.",
+ "ages": {"yahoo": {"fetched_at": "2026-11-26T10:15:00+01:00", "stale": false}, "bbm": {"fetched_at": "2026-11-26T10:10:00+01:00", "stale": false}},
+ "notices": []
+}
