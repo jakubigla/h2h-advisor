@@ -1,0 +1,14 @@
+{
+ "note": "Results of the calls already made this session, in order. There is no config.toml yet: this is a first run.",
+ "status()": {"data": {"sites": {
+   "yahoo": {"logged_in": true, "login_reason": null, "login_checked_at": "2026-11-26T08:02:00+00:00", "loads_today": 2, "daily_cap": 250, "backed_off_until": null},
+   "bbm": {"logged_in": true, "login_reason": null, "login_checked_at": "2026-11-26T08:02:00+00:00", "loads_today": 1, "daily_cap": 80, "backed_off_until": null}},
+   "cache": {}, "blocked": []}, "ages": {}, "notices": []},
+ "list_leagues()": {"data": [
+   {"league_id": "51001", "name": "Hoops League A", "team_id": "3", "team_name": "Night Owls"},
+   {"league_id": "51002", "name": "Hoops League B", "team_id": "8", "team_name": "Night Owls"}], "notices": []},
+ "get_league_settings('51001')": {"data": {"league_id": "51001", "name": "Hoops League A", "categories": ["FG_PCT","FT_PCT","TPM","PTS","REB","AST","STL","BLK","TO"], "roster_slots": {"PG":1,"SG":1,"G":1,"SF":1,"PF":1,"F":1,"C":1,"Util":3,"BN":3,"IL":1}, "max_adds_per_week": 5, "current_week": 6, "scoring_type": "one_win", "waiver_type": "FAB w/ Continual rolling list", "faab": true}, "notices": []},
+ "get_league_settings('51002')": {"data": {"league_id": "51002", "name": "Hoops League B", "categories": ["FG_PCT","FT_PCT","TPM","PTS","REB","AST","STL","BLK","TO"], "roster_slots": {"PG":1,"SG":1,"G":1,"SF":1,"PF":1,"F":1,"C":1,"Util":1,"BN":5,"IL":1}, "max_adds_per_week": 7, "current_week": 6, "scoring_type": "categories", "waiver_type": "Continual rolling list", "faab": false}, "notices": []},
+ "get_free_agents('51001', limit=1)": {"data": {"free_agents": [{"player": {"name": "Mark Williams", "nba_team": "PHX", "positions": ["C"], "status": "INJ"}, "on_waivers": false, "waiver_clear": null}], "claims": {}}, "notices": ["matched Hoops League A ↔ BBM _1. Hoops League A (Yahoo!)"]},
+ "get_free_agents('51002', limit=1)": {"data": {"free_agents": [{"player": {"name": "Jordan Goodwin", "nba_team": "PHX", "positions": ["PG","SG"], "status": null}, "on_waivers": true, "waiver_clear": "2026-11-27"}], "claims": {}}, "notices": ["set bbm_league_id for Hoops League B in config (BBM leagues: 5344 = 1. Some Roto League (Yahoo!); 602 = _1. Hoops League A (Yahoo!); 30008 = _2. Hoops Lg B (Yahoo!))"]}
+}

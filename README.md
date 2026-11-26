@@ -311,7 +311,7 @@ little is not a throwaway on a punt-points team.
 | **&lt;site&gt; answered 403/429/5xx: backing off** / **&lt;site&gt; backed off until** | The site refused or failed a page load. h2h-advisor stops loading from it for 15 minutes and shows cached data meanwhile; `status` shows `backed_off_until`. Ask again later. |
 | A brief takes minutes, other questions wait | A brief holds the advisor (and its one browser) while it loads every league's pages, and other tool calls wait until it ends. `status` still answers. If it is too slow, ask about one league at a time. |
 | **daily page-load cap reached** | The day's 250 Yahoo or 80 Basketball Monster page loads are used up. You get cached data until the next day. |
-| **set bbm_league_id for &lt;league&gt;** | The league's name did not match a Basketball Monster league, so free agents came from Yahoo only. Run `/h2h-advisor:setup` to pick it, or set `bbm_league_id` in the config. |
+| **set bbm_league_id for &lt;league&gt;** | The league's name did not match a Basketball Monster league, so free agents came from Yahoo only. The notice lists each Basketball Monster league as `<value> = <name>`. Run `/h2h-advisor:setup` to pick it, or set `bbm_league_id` to that value in the config. |
 | **could not read the &lt;page&gt; page** | The site changed its layout and the parser no longer reads it. That piece of data is missing until the parser is updated. |
 | **That Chrome profile is already open** (from `login`) | The h2h-advisor Chrome is still running. Quit it with Cmd+Q and run `login` again. |
 | The tools do not show up | In Claude Code, run `/mcp` to see the server's error. In Claude Desktop, check that both paths in `claude_desktop_config.json` are absolute, then quit and reopen the app. |

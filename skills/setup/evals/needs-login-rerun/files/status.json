@@ -1,0 +1,6 @@
+{"data": {"sites": {
+  "yahoo": {"logged_in": false, "login_reason": "redirected to login.yahoo.com", "login_checked_at": "2026-11-26T07:41:12+00:00", "loads_today": 6, "daily_cap": 250, "backed_off_until": null},
+  "bbm": {"logged_in": true, "login_reason": null, "login_checked_at": "2026-11-26T07:40:55+00:00", "loads_today": 3, "daily_cap": 80, "backed_off_until": null}},
+  "cache": {"matchup": {"items": 3, "newest": "2026-11-25T21:02:10+00:00", "oldest": "2026-11-25T20:58:44+00:00"}, "bbm:ros": {"items": 1, "newest": "2026-11-26T07:40:55+00:00", "oldest": "2026-11-26T07:40:55+00:00"}},
+  "blocked": []},
+ "ages": {}, "notices": []}

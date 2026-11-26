@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: first-run-write-config
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  Proposes a complete, loadable first config from the user's choices, without adding players the user did not name, treating a temporary keep as a note, and waits for a yes.

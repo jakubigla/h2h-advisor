@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: needs-login-rerun
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  Goes straight to the login step, asks before opening Chrome, explains Cmd+Q, and leaves the config and the leagues alone.

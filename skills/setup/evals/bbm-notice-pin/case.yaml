@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: bbm-notice-pin
+context:
+  scaffold_script: place-files.sh
+expected_outcome: |
+  Pins the unmatched league to the BBM option value from the notice, shows the whole merged config and waits for a yes, without loading the ROS projections.
