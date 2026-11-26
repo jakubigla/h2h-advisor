@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv sync)",
+      "Bash(uv lock)",
+      "Bash(uv run pytest tests/:*)",
+      "Bash(uv run ruff check:*)",
+      "Bash(uv run ruff format --check:*)",
+      "Bash(uv run python scripts/sanitize_fixture.py:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh release list:*)",
+      "Bash(gh release view:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git tag:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh release create:*)",
+      "Edit(src/h2h_advisor/browser/guard_rules.toml)"
+    ],
+    "deny": [
+      "Bash(uv run h2h-advisor login:*)",
+      "Bash(h2h-advisor login:*)",
+      "Read(~/.local/share/h2h-advisor/chrome-profile/**)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/ruff-check.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
