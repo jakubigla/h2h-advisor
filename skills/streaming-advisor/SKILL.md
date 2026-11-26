@@ -88,7 +88,11 @@ group it belongs to (or a new group). Keep it to a line or two; put lookups in `
   week: a player from the upgrades list joins the week's chain only on his own `per_cat_delta`.
 - **Don't sell noise: below ~0.05 expected categories, or below 1 point of win probability
   (`delta_objective` < 0.01 in one-win leagues), say "negligible".** The model's error is
-  bigger than that; an add spent on noise is gone for the week.
+  bigger than that; an add spent on noise is gone for the week. Not for a swap that drops
+  this week's own streamer while adds would otherwise go unused: that add is free, so a clear
+  gain in a chase category is worth taking (a C for REB/BLK over a SF's Saturday game).
+- **Never defend a skipped swap by "it gives up his game".** The gain is already net of the
+  game given up. When the user proposes a swap the plan lacks, score it before answering.
 
 **Moves**
 - **Count `usable_days`, not raw games, and show the slot per day.** A game on a day with no open

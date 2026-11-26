@@ -10,6 +10,10 @@ the plan against the lineup before presenting it:
   `plan_adds` again rather than accepting it.
 - A player added for a single day should be dropped after that day, not carried; a plan that
   holds one add all week while a better Fri/Sun fit exists is a worse plan.
+- A streamer may also be swapped on a day he still plays, when the newcomer fits the chase
+  categories better (a C's REB and BLK over a SF's PTS and TPM). The planner takes such a swap
+  on any clear gain, since the add would otherwise be lost: `drop_days_given_up` on a streamer
+  is the price, already counted in `gain`.
 - A player who just returned from injury (`Off Inj`, `Q`) may not play: name that risk.
 - Say why each move is dated when it is: the drop plays until then, or the add's first game.
 
