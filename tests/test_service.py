@@ -171,6 +171,8 @@ class World:
     yahoo_names: dict[str, str] = field(default_factory=dict)
     # BBM free agents listed in the league view before the waiver player
     bbm_extra_fas: list[P] = field(default_factory=list)
+    # rostered on Yahoo by a third team (BBM may still list them as free)
+    yahoo_taken: list[P] = field(default_factory=list)
     errors: dict[tuple[str, str], Exception] = field(default_factory=dict)
     needs_login: set[str] = field(default_factory=set)
     loads: list[str] = field(default_factory=list)
@@ -257,6 +259,10 @@ class FakeYahoo:
         self._load("waivers", league, f"y/players/{league}?status=W")
         return list(self.w.yahoo_waivers)
 
+    def taken(self, league):
+        self._load("taken", league, f"y/players/{league}?status=T")
+        return [self.w.yahoo_player(p) for p in (*MINE, *OPP, *self.w.yahoo_taken)]
+
 
 class FakeBbm:
     def __init__(self, session, world: World) -> None:
@@ -306,7 +312,7 @@ class FakeBbm:
                 status=self.w.bbm_status.get(p.name),
                 minutes=self.w.proj_minutes.get(p.name),
             )
-            for p in EVERYONE
+            for p in (*EVERYONE, *self.w.bbm_extra_fas)
         ]
         return self._page(rows)
 
@@ -716,8 +722,42 @@ def test_analyze_week_envelope_has_objective_build_and_targets(make):
 # -- free agents, BBM league match, waivers ------------------------------------------
 
 
+def no_taken(*leagues: str) -> dict:
+    """World errors: Yahoo's list of rostered players cannot be read, so who is free
+    falls back to BBM's league view."""
+    return {("taken", lg): ParseError("players", "no table") for lg in leagues}
+
+
+def test_who_is_free_is_decided_by_yahoo_rosters_not_bbm(make):
+    # BBM still lists Hot Pickup as a free agent; on Yahoo another team has him.
+    rig = make(World(yahoo_taken=[HOT]))
+    env = rig.advisor.free_agents(B)
+    assert {f.player.key for f in env.data["free_agents"]} == {MEH.key, WAIVER.key}
+    assert rig.world.count(f"y/players/{B}?status=T") == 1
+    assert not any(u.startswith("b/league/") for u in rig.world.loads)
+    assert not any("bbm_league_id" in n or "matched" in n for n in env.notices)
+    options = rig.advisor.rank_streamers(B, "rest_of_week").data["options"]
+    assert HOT.key not in {o.add.key for o in options}
+
+
+def test_rostered_player_is_matched_by_yahoo_short_name_or_across_a_trade(make):
+    short = World(yahoo_taken=[HOT], yahoo_names={HOT.name: "H. Pickup"})
+    traded = World(yahoo_taken=[replace(HOT, team="NYK")])  # BBM still has him on GSW
+    for world in (short, traded):
+        fas = make(world).advisor.free_agents(B).data["free_agents"]
+        assert HOT.key not in {f.player.key for f in fas}
+
+
+def test_unreadable_yahoo_rosters_fall_back_to_bbm_with_a_notice(make):
+    rig = make(World(errors=no_taken(B)))
+    env = rig.advisor.free_agents(B)
+    assert rig.world.count("b/league/1002") == 1
+    assert any("can lag behind Yahoo" in n for n in env.notices)
+    assert {f.player.key for f in env.data["free_agents"]} == {HOT.key, MEH.key, WAIVER.key}
+
+
 def test_bbm_league_auto_match_unique(make):
-    rig = make()
+    rig = make(World(errors=no_taken(B)))
     env = rig.advisor.free_agents("Big Men")
     assert rig.world.count("b/league/1002") == 1
     assert rig.world.count(f"y/players/{B}?status=A") == 0
@@ -727,7 +767,8 @@ def test_bbm_league_auto_match_unique(make):
 
 def test_bbm_league_ambiguous_falls_back_to_yahoo_with_notice(make):
     world = World(
-        league_options={"1001": "_1. Hoops… (Yahoo!)", "1003": "_3. Hoops Lea…"}
+        league_options={"1001": "_1. Hoops… (Yahoo!)", "1003": "_3. Hoops Lea…"},
+        errors=no_taken(A),
     )
     rig = make(world)
     env = rig.advisor.free_agents(A)
@@ -745,7 +786,7 @@ def test_bbm_league_ambiguous_falls_back_to_yahoo_with_notice(make):
 
 def test_configured_bbm_league_id_wins(make):
     config = Config(leagues={A: LeagueConfig(bbm_league_id="1002")})
-    rig = make(config=config)
+    rig = make(World(errors=no_taken(A)), config=config)
     rig.advisor.free_agents(A)
     assert rig.world.count("b/league/1002") == 1
 
@@ -807,7 +848,8 @@ def test_waiver_without_yahoo_date_keeps_none_when_the_yahoo_list_is_cut_off(mak
         )
         for i in range(YAHOO_WAIVERS_LIMIT)
     ]
-    env = make(World(yahoo_waivers=others)).advisor.free_agents(B)
+    world = World(yahoo_waivers=others, errors=no_taken(B))
+    env = make(world).advisor.free_agents(B)
     waiver = next(f for f in env.data["free_agents"] if f.player.key == WAIVER.key)
     assert waiver.on_waivers and waiver.waiver_clear is None
     assert any("Waiver Guy" in n for n in env.notices)
@@ -899,7 +941,9 @@ def test_daily_brief_reports_progress_after_each_league(make):
 
 
 def test_daily_brief_shares_day_pages_when_a_league_fails_after_them(make):
-    world = World(errors={("league_view", "1002"): RuntimeError("boom")})
+    world = World(
+        errors={("league_view", "1002"): RuntimeError("boom"), **no_taken(B)}
+    )
     rig = make(world)
     env = rig.advisor.daily_brief()
     assert rig.factory.calls == 1
@@ -1102,7 +1146,7 @@ def test_yahoo_waivers_load_even_when_bbm_shows_none(make):
 
 
 def test_auto_match_success_adds_notice(make):
-    env = make().advisor.free_agents("Big Men")
+    env = make(World(errors=no_taken(B))).advisor.free_agents("Big Men")
     assert "matched Big Men League ↔ BBM _2. Big Men Le… (Yahoo!)" in env.notices
 
 

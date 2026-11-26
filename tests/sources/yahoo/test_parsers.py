@@ -277,6 +277,23 @@ def test_parse_free_agents_waiver_date_rolls_into_next_year():
     assert date(2027, 1, 2) in clears
 
 
+def test_parse_taken_players():
+    players = parsers.parse_taken_players(load("players_taken_57243.html"))
+    assert len(players) == 25
+    first = players[0]
+    assert (first.name, first.nba_team, first.positions) == ("Victor Wembanyama", "SAS", ("C",))
+    assert first.yahoo_id == "10094"
+    assert parsers.has_next_page(load("players_taken_57243.html"))
+
+
+def test_parse_taken_players_needs_rows_and_the_roster_status_column():
+    html = load("players_taken_57243.html")
+    with pytest.raises(ParseError, match="Roster Status"):
+        parsers.parse_taken_players(html.replace("Roster Status", "Owner"))
+    with pytest.raises(ParseError, match="no rows"):
+        parsers.parse_taken_players(_without_player_rows(html))
+
+
 def test_has_next_page():
     html = load("players_51347.html")
     assert parsers.has_next_page(html)

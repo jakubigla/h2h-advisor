@@ -8,8 +8,12 @@
     `! uv run --directory ${CLAUDE_PLUGIN_ROOT} h2h-advisor login` with the plugin's real path filled in,
     logs into Yahoo and Basketball Monster in the plain Chrome window, then quits it with Cmd+Q.
     Never try to log in yourself.
-  - "set bbm_league_id for <league> (BBM leagues: 30008 = <name>; ...)": the BBM league was not matched
-    by name, so free agents came from Yahoo only; offer `/h2h-advisor:setup` to pin it. "BBM leagues: none loaded" means
+  - "<league>: Yahoo's list of rostered players is unavailable; who is free comes from Basketball
+    Monster, which can lag behind Yahoo": normally Yahoo's rosters decide who is free. This time the
+    list did not load, so an add shown may already be taken: say so next to every add.
+  - "set bbm_league_id for <league> (BBM leagues: 30008 = <name>; ...)": only with the notice above:
+    the BBM league (the fallback) was not matched by name either, so free agents came from Yahoo's
+    first two players pages; offer `/h2h-advisor:setup` to pin it. "BBM leagues: none loaded" means
     BBM failed this time: say to try again later, don't ask the user to choose.
   - "daily page-load cap reached": cached data only until tomorrow.
   - a backed-off site (403/429/5xx): it is resting for a while; cached data meanwhile.

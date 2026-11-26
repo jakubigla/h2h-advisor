@@ -250,3 +250,31 @@ def test_empty_waivers_page_gives_no_waivers_and_one_load():
     )
     assert source.waivers("51347") == []
     assert len(session.calls) == 1
+
+
+def test_taken_reads_every_page_until_there_is_no_next():
+    page = load("players_taken_57243.html")
+    last = re.sub(r'<a href="[^"]*">(Next 25)</a>', r"\1", page)
+    session, source = make(
+        {
+            urls.free_agents(57243, 0, status="T"): page,
+            urls.free_agents(57243, 25, status="T"): last,
+        }
+    )
+    taken = source.taken(57243)
+    assert len(taken) == 50
+    assert taken[0].key == "victor wembanyama|SAS"
+    assert session.urls == [
+        urls.free_agents(57243, 0, status="T"),
+        urls.free_agents(57243, 25, status="T"),
+    ]
+
+
+def test_taken_list_that_never_ends_is_an_error_not_a_short_list(monkeypatch):
+    monkeypatch.setattr("h2h_advisor.sources.yahoo.source.TAKEN_PAGES_MAX", 2)
+    page = load("players_taken_57243.html")
+    _, source = make(
+        {urls.free_agents(57243, n, status="T"): page for n in (0, 25, 50)}
+    )
+    with pytest.raises(ParseError, match="not read whole"):
+        source.taken(57243)

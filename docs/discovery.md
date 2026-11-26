@@ -180,6 +180,10 @@ first. Other params (`stat1`, `sort`, `cut_type`) keep their defaults.
   `data-ys-playerid`, team-position span, injury status span).
   This page's stat cells are per game averages and the makes/attempts columns hold
   decimals (`3.0/5.0`).
+- `status=T` (fixture `yahoo/players_taken_57243.html`): the same table, every rostered player
+  of the league, 25 per page (16 teams: 9 pages); Roster Status holds the fantasy team's name.
+  `taken()` reads it whole. It decides who is free: BBM's league view follows Yahoo only when
+  synced there by hand.
 - Roster Status text: `FA` (free agent) or `W (Nov 26)` (on waivers until that date).
   Seen: `FA`, `W (Nov 26)`, `W (Nov 27)`, `W (Nov 28)`. In leagues without waivers
   there is no `W`.

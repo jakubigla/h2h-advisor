@@ -7,8 +7,9 @@ BASE = "https://basketball.fantasysports.yahoo.com"
 POSITIONS = frozenset({"PG", "SG", "G", "SF", "PF", "F", "C", "Util"})
 # The players page lists 25 per page and pages by offset in the `count` param.
 PAGE_SIZE = 25
-# Availability filter on the players page: all available, free agents only, waivers only.
-STATUSES = frozenset({"A", "FA", "W"})
+# Availability filter on the players page: all available, free agents only, waivers
+# only, and every player on a fantasy team's roster (taken).
+STATUSES = frozenset({"A", "FA", "W", "T"})
 
 
 def _positive_int(value: int, what: str) -> int:
@@ -43,7 +44,7 @@ def free_agents(
     league_id: int, start: int = 0, position: str | None = None, status: str = "A"
 ) -> str:
     """Players page filtered by availability: `A` (free agents and waivers, the
-    default), `FA` (free agents only) or `W` (waivers only).
+    default), `FA` (free agents only), `W` (waivers only) or `T` (taken: on a roster).
 
     `start` is a zero-based offset into the list, a multiple of PAGE_SIZE; it is
     sent as Yahoo's `count` param and omitted for the first page.

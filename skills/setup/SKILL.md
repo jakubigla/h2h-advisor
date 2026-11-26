@@ -23,8 +23,9 @@ Monster 80), and every result lands in context. Spend both on purpose:
 
 - `status()` loads nothing. `list_leagues` is 1 Yahoo page; `get_league_settings` 1 Yahoo page
   per league (cached 7 days).
-- `get_free_agents(league, limit=1)` settles one league's Basketball Monster (BBM) match; a few
-  pages, cached an hour, and the check-up brief reuses them. `limit=1`: only its notice matters.
+- `get_free_agents(league, limit=1)` shows whether a league needs a Basketball Monster (BBM)
+  match at all; about ten Yahoo pages for a 16-team league (its rostered players), cached an
+  hour, and the check-up brief reuses them. `limit=1`: only its notices matter.
 - Do not call `get_projections(scope="ros")` here: it returns ~240K characters of projections.
   The "set bbm_league_id" notice already lists every BBM league with its option value.
 - `daily_brief(leagues="all")` loads several pages per league and can take minutes.
@@ -109,7 +110,9 @@ per week, FAB waivers or not.
 Gather what you need for every new league first, then ask about all of them in one round.
 Where the user has no view, the default is a fine answer; offer it as one.
 
-1. **BBM league.** For each league without `bbm_league_id`: `get_free_agents(league, limit=1)`.
+1. **BBM league.** Only a fallback: who is free comes from Yahoo's rosters, and the BBM league
+   view is read only when that list fails to load. So `get_free_agents(league, limit=1)` normally
+   carries neither notice below and there is nothing to ask. If one shows:
    - "matched <league> ↔ BBM <name>": matched by name, nothing to write. Mention it.
    - "set bbm_league_id for <league> (BBM leagues: 30008 = _2. I Liga H2H … (Yahoo!); …)":
      propose the closest name and ask. BBM decorates names with a leading "_2." and a trailing

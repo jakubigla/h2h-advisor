@@ -54,13 +54,14 @@ def test_yahoo_free_agents_position_filter():
 
 def test_yahoo_free_agents_status_filter():
     assert yahoo.free_agents(51347, status="W") == f"{YAHOO}/nba/51347/players?status=W"
+    assert yahoo.free_agents(51347, status="T") == f"{YAHOO}/nba/51347/players?status=T"
     assert (
         yahoo.free_agents(51347, start=25, status="W")
         == f"{YAHOO}/nba/51347/players?status=W&count=25"
     )
 
 
-@pytest.mark.parametrize("bad", ["", "w", "T", "ALL", None])
+@pytest.mark.parametrize("bad", ["", "w", "t", "K", "ALL", None])
 def test_yahoo_free_agents_invalid_status_raises(bad):
     with pytest.raises(ValueError):
         yahoo.free_agents(51347, status=bad)
