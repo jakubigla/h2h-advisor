@@ -1,0 +1,14 @@
+{
+  "name": "h2h-advisor",
+  "owner": { "name": "Jakub Igla" },
+  "plugins": [
+    {
+      "name": "h2h-advisor",
+      "source": "./",
+      "description": "Read-only Yahoo Fantasy NBA H2H 9-cat and Basketball Monster advisor"
+    }
+  ],
+  "metadata": {
+    "description": "Local marketplace for the h2h-advisor plugin"
+  }
+}

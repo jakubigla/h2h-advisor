@@ -1,0 +1,30 @@
+[project]
+name = "h2h-advisor"
+version = "0.1.0"
+description = "Read-only MCP server giving fantasy basketball advice from Yahoo and Basketball Monster data"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=2.3.0",
+    "openpyxl>=3.1.5",
+    "playwright>=1.65.2",
+    "selectolax>=1.0.2",
+]
+
+[project.scripts]
+h2h-advisor = "h2h_advisor.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "browser: launches a real headless Chrome (needs Google Chrome installed)",
+]

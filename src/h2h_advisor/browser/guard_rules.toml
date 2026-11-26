@@ -1,0 +1,171 @@
+# Read-only guard rules. Anything not explicitly allowed here is denied.
+# Host matching is exact and case-insensitive (one trailing dot is ignored).
+
+[hosts]
+yahoo = ["basketball.fantasysports.yahoo.com", "s.yimg.com"]
+bbm = ["basketballmonster.com", "www.basketballmonster.com"]
+# Login pages are never fetched (login happens in a plain Chrome, see cli.py);
+# landing on one means the session expired.
+login = ["login.yahoo.com", "api.login.yahoo.com"]
+
+[yahoo]
+# Case-insensitive substrings of path+query; denied for every method.
+action_patterns = [
+    "/addplayer",
+    "/dropplayer",
+    "trade",
+    "crumb=",
+    "/claim",
+    "/waiver",
+    "editroster",
+    "/editsettings",
+    "/message",
+    "/transactions/add",
+    # Lineup and roster actions without a crumb (defence in depth: we only ever
+    # GET /nba, settings, matchup, team and players pages).
+    "startactive",
+    "autofill",
+    "lineup",
+]
+# Read-only data POSTs: [{url_prefix = "...", operation = "..."}]
+post_allow = []
+
+[bbm]
+# Case-insensitive substrings of the path; denied for every method.
+deny_path_patterns = [
+    "/account",
+    "/settings",
+    "/leaguesettings",
+    "/subscribe",
+    "/payment",
+    "/login",
+    "/logout",
+]
+# GET/HEAD is allowed only to these exact paths (lowercase) ...
+get_pages = ["/", "/dailyprojections.aspx", "/projections.aspx"]
+# ... or to page assets with one of these path suffixes (stylesheets, scripts,
+# the two WebForms resource handlers, icons, images, fonts). No .json: nothing
+# BBM needs is JSON, and an endpoint like /api/x/remove.json would pass. Paths
+# with path-info after a handler (".aspx/", ".axd/") or naming a .ashx/.asmx
+# handler are denied in code before this list is consulted.
+get_static_suffixes = [
+    ".js", ".css", "/webresource.axd", "/scriptresource.axd", ".ico", ".png",
+    ".gif", ".jpg", ".jpeg", ".svg", ".webp", ".woff", ".woff2", ".ttf",
+]
+# A GET whose query names a WebForms event/viewstate field, a deny pattern, an
+# approved event target or a submit button is denied (WebForms treats it as a postback).
+# POST is allowed only to these exact paths (case-insensitive) ...
+post_pages = ["/dailyprojections.aspx", "/projections.aspx"]
+# ... with __EVENTTARGET in this list (exact match). Approved postbacks only:
+# the player filter and league dropdowns ...
+post_event_targets = ["PlayerFilterControl", "pageTitleRowLeague"]
+# ... and the date buttons, allowed as the event when __EVENTTARGET is empty.
+post_submit_buttons = ["DateNextButton", "DateBackButton"]
+# Fields the driver may set to a chosen value before a postback (names only; the
+# session refuses any other). All other fields are posted as the page rendered them.
+post_settable_fields = ["GAMEDATE", "PlayerFilterControl", "pageTitleRowLeague"]
+# Regexes (fullmatch, casefolded names). A POST carrying a field name or an
+# __EVENTTARGET value that matches one is denied even if allowlisted elsewhere:
+# custom values and display-column edits, messages, favourites, dark mode,
+# CSV export and other state-changing controls.
+deny_field_patterns = [
+    '^cv(add|remove|up|down|order|defaults)_.*',
+    '^dc(save|apply|reset|copyall)_.*',
+    '^managermessagesid_.*',
+    '^pagetitlerowfavorites$',
+    '^darktoggle$',
+    '^cleargames$',
+    '^csvbutton$',
+    '^remaining$',
+    '^joshcommentsbutton$',
+]
+# CSS selectors for export controls the driver may click (used by Task 6).
+export_selectors = []
+
+# page path (lowercase) -> exact form fields a POST to it may carry. A page with
+# no entry here accepts no POSTs. WebForms plumbing fields (__VIEWSTATE etc.)
+# are always allowed. Names are casefolded at load.
+[bbm.post_fields]
+"/dailyprojections.aspx" = [
+    "BoxScoreTagFilterControlId",
+    "CustomProjectionCB",
+    "EditDisplayColumns-toggle",
+    "GAMEDATE",
+    "PlayerFilterControl",
+    "PuntCategoriesControlCOLLAPSE-toggle",
+    "SHOWTABLEFILTERS",
+    "TeamFilterControl",
+    "UserLeagueTeamsFilterControlIdUSE",
+    "__VIEWSTATEFIELDCOUNT",
+    "ctl00$ContentPlaceHolder1$ConsistencyColumnUserControl$Consist",
+    "ctl00$ContentPlaceHolder1$ConsistencyColumnUserControl$ConsistType",
+    "ctl00$ContentPlaceHolder1$ConsistencyColumnUserControl$PastDaysConsistencyTextBox",
+    "ctl00$ContentPlaceHolder1$ConsistencyColumnUserControl$PastGamesConsistencyTextBox",
+    "ctl00$ContentPlaceHolder1$DailyConsistencyStatColumnUserControl$ConsistType",
+    "ctl00$ContentPlaceHolder1$DailyConsistencyStatColumnUserControl$PastDaysStatTextBox",
+    "ctl00$ContentPlaceHolder1$DailyConsistencyStatColumnUserControl$PastGamesStatTextBox",
+    "ctl00$ContentPlaceHolder1$DailyConsistencyStatColumnUserControl$StatConsist",
+    "ctl00$ContentPlaceHolder1$DailyConsistencyStatColumnUserControl$StatDropDownList",
+    "ctl00$ContentPlaceHolder1$UseActualResultsCheckBox",
+    "cvcol_CustomValuesService_games",
+    "cvcol_CustomValuesService_mg",
+    "cvcol_CustomValuesService_rank",
+    "cvtype_CustomValuesService",
+    "cvvalue_CustomValuesService",
+    "pageTitleRowFavorites_order",
+    "pageTitleRowLeague",
+    "pageTitleRowSearch-search",
+    "pageTitleRowSearch-selected",
+    "DateNextButton",
+    "DateBackButton",
+]
+"/projections.aspx" = [
+    "AssumeGoodHealth",
+    "BoxScoreTagFilterControlId",
+    "EditDisplayColumns-toggle",
+    "PlayerFilterControl",
+    "PositionsFilterControlPerDD",
+    "ProjectionSourceControl",
+    "PuntCategoriesControlCOLLAPSE-toggle",
+    "ReplacementPlayersId",
+    "SEASONSTART",
+    "SHOWTABLEFILTERS",
+    "StatDisplayType",
+    "TeamFilterControl",
+    "UserLeagueTeamsFilterControlIdUSE",
+    "ValueDisplayType",
+    "ValueTransformationTypeControl",
+    "__VIEWSTATEFIELDCOUNT",
+    "ctl00$ContentPlaceHolder1$StatusUserControl$StatusDropDownList",
+    "cvcol_CustomValuesService_games",
+    "cvcol_CustomValuesService_mg",
+    "cvcol_CustomValuesService_rank",
+    "cvtype_CustomValuesService",
+    "cvvalue_CustomValuesService",
+    "pageTitleRowFavorites_order",
+    "pageTitleRowLeague",
+    "pageTitleRowSearch-search",
+    "pageTitleRowSearch-selected",
+]
+
+# Numbered families (__VIEWSTATE<n>, G<gameid>, ...) change daily, so they are
+# matched by pattern (lowercase, fullmatch) instead of listed. /projections.aspx
+# has no game checkboxes, hence no g<n> pattern there.
+[bbm.post_field_patterns]
+"/dailyprojections.aspx" = [
+    '^__viewstate\d+$',
+    '^g\d+$',
+    '^dccol_displaycolumnsid_\d+$',
+    '^cat_\d+$',
+    '^pos_\d+$',
+    '^puntcategoriescontrol_weight_\d+$',
+]
+"/projections.aspx" = [
+    '^__viewstate\d+$',
+    '^dccol_displaycolumnsid_\d+$',
+    '^cat_\d+$',
+    '^pos_\d+$',
+    '^puntcategoriescontrol_weight_\d+$',
+]
+[resources]
+block = ["image", "media", "font"]

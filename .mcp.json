@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "h2h-advisor": {
+      "command": "uv",
+      "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "h2h-advisor", "serve"]
+    }
+  }
+}
