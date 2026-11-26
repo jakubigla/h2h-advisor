@@ -19,7 +19,7 @@
   (relay the notice; still show `upgrades` and `claims`). A `null` league entry failed entirely.
 - `potential`: the best use of the adds left (a `plan_adds` plan) - `matchup_win_prob`,
   `expected_cats_won`, `adds_used`, dated `moves` (`on`), `objective`: `categories` (it maximised
-  build-weighted expected categories; each move's `gain` is in categories) or `one_win` (matchup
+  expected categories in this week's chase categories; each move's `gain` is in categories) or `one_win` (matchup
   win probability; `gain` in probability).
 - `streamers` (top 3) or `streamer_reason`; `upgrades` (up to 5); `claims`; `facts` (2-4 ready lines:
   usable games me vs opponent, light days, no-game days, close categories, kept-off-drop-list players,
@@ -34,7 +34,11 @@
 ## Streamer options (`rank_streamers(`)
 - `add`, `drop`, `usable_days` with `slot_by_day`, `raw_games` (not what counts), `light_days`
   (days with ≤ 4 NBA games: open slots are likeliest there).
-- `delta_objective` (ranked on), `delta_expected_cats`, `adds_left_after`.
+- `delta_objective` (ranked on), `delta_expected_cats`, `adds_left_after`. In a categories
+  league both count only this week's chase categories: punted ones and strong ones already
+  safe weigh 0, and each category's win chance counts only inside 10-90% (1% to 5% TPM, or 94%
+  to 99% STL, adds nothing; 8% to 40% REB counts from 10%). `per_cat_delta` stays raw, so it
+  can still show a move in a decided category: don't quote that one.
 - `drop_ros_value` / `add_ros_value`: rest-of-season value for this league's build (the mean of
   BBM's category values over the categories not punted), so a punt-PTS shot-blocker is not a
   throwaway just because BBM's overall value is low.
