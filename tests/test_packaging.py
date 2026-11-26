@@ -38,9 +38,21 @@ def frontmatter(text: str) -> tuple[dict[str, str], str]:
 
 
 def skill(name: str) -> tuple[dict[str, str], str]:
-    return frontmatter(
-        (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
-    )
+    """Frontmatter of SKILL.md, and its body followed by every references/*.md file."""
+    folder = ROOT / "skills" / name
+    fields, body = frontmatter((folder / "SKILL.md").read_text(encoding="utf-8"))
+    refs = sorted((folder / "references").glob("*.md"))
+    return fields, "\n".join([body, *(r.read_text(encoding="utf-8") for r in refs)])
+
+
+def test_skill_references_exist():
+    """Every references/ file a SKILL.md points to exists, and every one is pointed to."""
+    for name in SKILLS:
+        folder = ROOT / "skills" / name
+        body = (folder / "SKILL.md").read_text(encoding="utf-8")
+        named = set(re.findall(r"`references/([\w.-]+\.md)`", body))
+        present = {p.name for p in (folder / "references").glob("*.md")}
+        assert named == present, name
 
 
 def test_plugin_manifest_valid_json_and_name():
