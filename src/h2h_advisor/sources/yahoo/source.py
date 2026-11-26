@@ -14,6 +14,7 @@ from h2h_advisor.sources.yahoo import parsers, urls
 from h2h_advisor.sources.yahoo.parsers import LeagueRef, ParseError
 
 SITE = "yahoo"
+WAIVERS_LIMIT = 2 * urls.PAGE_SIZE  # players read from the waivers list
 
 
 class YahooSource:
@@ -108,8 +109,10 @@ class YahooSource:
         return self._players(int(league_id), limit, position, "A")
 
     def waivers(self, league_id: str | int) -> list[FreeAgent]:
-        """Players on waivers with their clear dates, at most 2 pages."""
-        return self._players(int(league_id), 2 * urls.PAGE_SIZE, None, "W")
+        """Players on waivers with their clear dates, at most WAIVERS_LIMIT (2 pages).
+
+        Fewer than WAIVERS_LIMIT means the list is complete."""
+        return self._players(int(league_id), WAIVERS_LIMIT, None, "W")
 
     def _players(
         self, league: int, limit: int, position: str | None, status: str

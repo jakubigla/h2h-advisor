@@ -29,6 +29,7 @@ from h2h_advisor.models import (
     Player,
     RosterEntry,
 )
+from h2h_advisor.sources.schedule import Schedule
 
 CANDIDATE_LIMIT = 25
 MAX_POOL = 3  # most players a streaming move may drop, by default
@@ -318,11 +319,22 @@ def _usable_slots(ctx: WeekContext, add_key: str, days: list[date]) -> dict[date
     return {d: lineups[d][add_key] for d in days if add_key in lineups[d]}
 
 
+def first_play_day(schedule: Schedule, days: list[date]) -> date | None:
+    """The first of ``days`` that is not known to have no NBA games.
+
+    Horizon "today" means the first day an add made now can score: on a day
+    without games (Thanksgiving) that is the next day with games. A day missing
+    from the schedule (its page did not load) is unknown, so it is not skipped.
+    """
+    return next((d for d in days if d not in schedule or schedule[d]), None)
+
+
 def _horizon_days(ctx: WeekContext, horizon: Literal["today", "rest_of_week"]) -> list[date]:
     start = effective_start(ctx.settings, ctx.today)
     days = [d for d in remaining_days(ctx) if d >= start]
     if horizon == "today":
-        return [start] if start in days else []
+        first = first_play_day(ctx.schedule, days)
+        return [first] if first is not None else []
     return days
 
 
