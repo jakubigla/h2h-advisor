@@ -1214,6 +1214,12 @@ class Advisor:
             if ros_row is not None and ros_row.projection.value is not None:
                 values[key] = ros_row.projection.value
 
+        # A drop-first note says the player is useless: the user will not start him,
+        # so from the effective start his games count for nothing, as is or when an
+        # add takes his place (only locked days before the start keep theirs).
+        for key in self._drop_first(lid, mine):
+            active[key] = {d for d in active.get(key, set(days)) if d < start}
+
         unknown = [e.player.name for e in [*mine, *opp] if e.player.key not in per_game]
         if unknown:
             call.notice(f"{settings.name}: no BBM projection for {', '.join(unknown)}")
