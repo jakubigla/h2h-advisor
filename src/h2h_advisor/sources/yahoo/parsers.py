@@ -415,8 +415,11 @@ def parse_roster(html: str) -> list[RosterEntry]:
         label = _need(row.css_first("td.pos span.pos-label"), page, "slot label")
         slot = label.attributes.get("data-pos") or _norm(label.text())
         cell = _need(row.css_first("td.player"), page, "player cell")
-        if cell.css_first("a.name") is None and "(empty)" in _norm(cell.text()):
-            continue  # an unfilled slot
+        if cell.css_first("a.name") is None and (
+            cell.css_first(".emptyplayer") is not None
+            or "(empty)" in _norm(cell.text()).lower()
+        ):
+            continue  # an unfilled slot: Yahoo writes "(Empty)" in a div.emptyplayer
         entries.append(RosterEntry(_parse_player(cell, page), slot))
     if not entries:
         raise ParseError(page, "roster table has no players")
