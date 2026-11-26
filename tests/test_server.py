@@ -28,6 +28,7 @@ TOOLS = {
     "daily_brief",
     "status",
 }
+NOTE_TOOLS = {"add_note", "list_notes", "remove_note"}
 NOW = datetime(2026, 11, 25, 15, 0, tzinfo=UTC)
 
 
@@ -107,17 +108,29 @@ def stub(monkeypatch):
 
 
 def test_tool_names_exact():
-    assert {t.name for t in run(server.mcp.list_tools())} == TOOLS
+    assert {t.name for t in run(server.mcp.list_tools())} == TOOLS | NOTE_TOOLS
 
 
 def test_tools_read_only_annotated():
-    tools = run(server.mcp.list_tools())
+    tools = [t for t in run(server.mcp.list_tools()) if t.name not in NOTE_TOOLS]
     assert len(tools) == len(TOOLS)
     for tool in tools:
         assert tool.annotations.read_only_hint is True, tool.name
         assert tool.annotations.destructive_hint is False, tool.name
         assert "read-only" in tool.description.lower(), tool.name
         assert "never changes anything" in tool.description.lower(), tool.name
+
+
+def test_note_tools_write_only_the_local_notes_file():
+    tools = [t for t in run(server.mcp.list_tools()) if t.name in NOTE_TOOLS]
+    assert len(tools) == len(NOTE_TOOLS)
+    for tool in tools:
+        assert tool.annotations.read_only_hint is False, tool.name
+        assert tool.annotations.destructive_hint is False, tool.name
+        assert tool.annotations.open_world_hint is False, tool.name
+        assert "local notes file" in tool.description, tool.name
+        assert "never changes anything" in tool.description.lower(), tool.name
+    assert "add_note" in server.INSTRUCTIONS
 
 
 def test_server_instructions_state_the_rules():
@@ -235,6 +248,21 @@ def test_every_tool_maps_parameters_to_the_advisor(stub):
             },
         ),
         ("status", {}, "status", {}),
+        (
+            "add_note",
+            {"kind": "keep", "player": "Backup Big", "league": "Hoops", "until": "2026-12-10"},
+            "add_note",
+            {"kind": "keep", "player": "Backup Big", "league": "Hoops", "reason": "",
+             "until": date(2026, 12, 10)},
+        ),
+        (
+            "add_note",
+            {"kind": "drop_first", "player": "Bench Wing"},
+            "add_note",
+            {"kind": "drop_first", "player": "Bench Wing", "league": "all", "reason": "", "until": None},
+        ),
+        ("list_notes", {}, "list_notes", {"league": None}),
+        ("remove_note", {"note_id": 3}, "remove_note", {"note_id": 3}),
     ]
     for tool, arguments, method, expected in cases:
         stub.calls.clear()

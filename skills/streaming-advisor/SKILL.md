@@ -29,6 +29,7 @@ Lookups, read when you need them:
 | Login, caps, cache health | - | `status()` (loads no pages) |
 | A roster, the opponent's, free agents | - | `get_roster(league, team="me" or "opponent")`, `get_free_agents(league)` |
 | "Who usually beats me in X?" | - | `get_history(league)` |
+| Guidance on a player ("keep him for now", "drop him first") | - | `add_note(kind, player, league, reason, until)`; `list_notes()`, `remove_note(id)` |
 
 `league` is a league name (or a unique part of it) or an id. Status mode shows numbers and
 facts, no moves unless asked. Moves mode always shows both lists, **This week** and
@@ -40,14 +41,17 @@ facts, no moves unless asked. Moves mode always shows both lists, **This week** 
 2. **Read the week** (`analysis`): group categories into locked or likely, swing, and out of reach
    (`status`, `win_prob`, now and projected totals).
 3. **Chase or punt**, by projected margin and games left for both sides. Name each category to
-   chase or concede, with a reason ("BLK: 48%, you +3 usable games - chase").
+   chase or concede, with a reason ("BLK: 48%, you +3 usable games - chase"). This is your call,
+   made from the numbers: never ask the user what to punt.
 4. **Score by the league's objective** (`objective`):
    - `one_win`: a majority of categories wins the week. `targets` is the set to win; **safe**
      targets have status `locked_win` or `likely_win`; N = len(targets) - safe. Say "Safe: PTS,
      TPM. You need N of the swing categories: AST, STL, FT_PCT". Rank by `delta_objective`
      (win probability; 0.03 = 3 points).
    - `categories`: every category counts; rank by `delta_expected_cats`.
-5. **This week** from `streamers` / `rank_streamers(`, checked against the rules below.
+5. **This week** from `streamers` / `rank_streamers(`, checked against the rules below. With
+   more than one add left, the week is a chain: show `potential.moves` (or `plan_adds(`) day by
+   day, not only the first stream.
 6. **Long-term upgrades** from `upgrades` / `long_term_upgrades(`, whenever any exist.
 7. **Answer** with the mode's template, ending with the data-age line.
 
@@ -66,12 +70,22 @@ group it belongs to (or a new group). Keep it to a line or two; put lookups in `
 
 **Reading the numbers**
 - **Never headline the as-is win chance alone; pair it with `potential`** ("23% as is, 41% with
-  3 streams"). As-is assumes no moves, so a low number with adds left is a to-do list, not a verdict.
+  3 streams"; in a categories league, expected categories: "4.7 as is, 5.5 with 2 streams").
+  As-is assumes no moves, so a low number with adds left is a to-do list, not a verdict.
+- **Derive the week's punts yourself; never ask the user.** Concede `build.punt` plus any category
+  under ~10% this week; chase the swing ones and `at_risk_strong`. The data answers it, and the
+  user expects you to read it.
 - **Respect the league build.** No credit for categories in `build.punt` or `build.strong`, no
   penalty for hurting a punted one - except `at_risk_strong`, a strong category not safe this
   week: flag it and chase it.
 - **When the user's read disagrees with the numbers, look for what the engine cannot see** (an
-  IL player returning, a stream already planned) before restating them.
+  IL player returning, a stream already planned, a teammate's injury opening minutes) before
+  restating them. If they are right about a player, store it as a note (below); don't just agree.
+- **Credit a stream only with this week's chase categories.** Quote the categories it moves from
+  `per_cat_delta`, and only those still in play: a gain in a category already won (~90%+), out
+  of reach (~10% or less) or punted is no reason to add anyone. "Helps STL" when STL is 98% is
+  wrong. Long-term upgrades' `per_cat_ros_delta` is season value, never a reason to stream this
+  week: a player from the upgrades list joins the week's chain only on his own `per_cat_delta`.
 - **Don't sell noise: below ~0.05 expected categories, or below 1 point of win probability
   (`delta_objective` < 0.01 in one-win leagues), say "negligible".** The model's error is
   bigger than that; an add spent on noise is gone for the week.
@@ -87,8 +101,18 @@ group it belongs to (or a new group). Keep it to a line or two; put lookups in `
 - **Check the add's injury `status` (O, INJ, D, GTD, Q) and say it.**
 - **Date every move.** A move dated after today is to prepare, not do; a player who plays today
   is not dropped today.
-- **Protected names go in `never_drop` (config).** When the user says a player is a no-go, offer
-  to add him via `/h2h-advisor:setup`.
+- **Store the user's guidance on a player as a note, at once, without asking.** "Keep him for a
+  while" -> `add_note(kind="keep")`; "drop him", "he's useless" -> `add_note(kind="drop_first")`.
+  Put their reason in `reason`; `until` = the matchup week's last day for "this week", else the
+  default two weeks. Say what you stored and until when. The engine follows active notes (a
+  kept player is never a drop; a drop-first player is offered first, even above replacement
+  level), and the brief's fact "Your notes" lists them: mention one ending within 2 days so the
+  user can renew it. `never_drop` in config (via `/h2h-advisor:setup`) is only for players the
+  user wants protected all season.
+- **Chain the adds; adds left are use-it-or-lose-it.** A streamer whose games are played is
+  swapped for whoever fits the next days (Fri add, Sun swap). Show the whole dated chain and how
+  many adds it leaves unused; adds left unused while a day with games has an open slot is a gap
+  to call out (see `references/plan-adds.md`).
 - **When there are no options, keep the list heading, write "none qualify" and explain the
   `reason` / `streamer_reason`.**
 

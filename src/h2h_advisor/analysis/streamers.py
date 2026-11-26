@@ -37,7 +37,12 @@ PLAN_BEAM = 3  # partial plans kept at each step of the search
 PLAN_EXPAND = 4  # next moves tried from each of them
 PLAN_MIN_GAIN = 0.03  # a move that gives up games must add this much win probability
 PLAN_FREE_GAIN = 0.01  # a move that gives up none (the drop would not have started) only this much
-PLAN_SAFE = 0.90  # at or above this the week is safe: no moves worth a drop
+# Categories leagues plan on expected categories won (every category counts in the
+# standings), so the bars are in categories: the skill's "negligible" cut for a free
+# drop, twice that when the drop gives up games.
+PLAN_MIN_GAIN_CATS = 0.10
+PLAN_FREE_GAIN_CATS = 0.05
+PLAN_SAFE = 0.90  # one-win leagues: at or above this the week is safe, no moves worth a drop
 ACTIVATION_POOL = 4  # weakest roster players (by ROS) considered to make room for an IL return
 FOLLOW_UP_OPTIONS = 5
 FOLLOW_UP_CANDIDATES = 5
@@ -82,7 +87,7 @@ class PlannedMove:
     usable_days: list[date]  # days the add gets an active slot, from `on` on
     slot_by_day: dict[date, str]
     drop_days_given_up: list[date]  # days from `on` on the drop would have started
-    gain: float  # matchup win probability the move added when it was picked
+    gain: float  # what the move added when picked, in the plan's `objective` units
     adds_left_after: int
     ros_cost_flag: bool = False  # the drop is above replacement level
     claim: bool = False  # the add is on waivers: a claim that clears on or before `on`
@@ -119,6 +124,10 @@ class AddPlan:
     target_cats: int | None = None  # the plan was ranked by P(at least this many categories)
     base_target_prob: float | None = None  # P(at least target_cats) with no move
     target_prob: float | None = None  # ... after every planned move
+    # What the plan maximised, and the unit of each move's `gain`: "categories" (build-
+    # weighted expected categories won), "one_win" (matchup win probability) or
+    # "target" (P(at least target_cats categories)).
+    objective: Literal["categories", "one_win", "target"] = "one_win"
 
 
 @dataclass(frozen=True)
@@ -143,6 +152,7 @@ def drop_pool(
     margin: float,
     stream_slots: int | None,
     keep: frozenset[str] = frozenset(),
+    drop_first: frozenset[str] = frozenset(),
 ) -> list[RosterEntry]:
     """Healthy roster players close to replacement level (or the bottom `stream_slots`), weakest first.
 
@@ -150,23 +160,29 @@ def drop_pool(
     useful player. An injured player (O, INJ, ...) is never offered, whatever his games
     this week: "he misses nothing" is how a star on a short absence looks free to cut.
     `keep` holds player keys never offered (rotation players by recent minutes).
+    `drop_first` holds player keys the user said to drop first: offered ahead of everyone,
+    whatever their value, minutes or status (the user decided), unless in an IL slot.
     """
     protected = {normalize_name(name) for name in never_drop}
+    chosen = [e for e in roster if e.player.key in drop_first and e.slot not in INACTIVE_SLOTS]
     eligible = sorted(
         (
             e for e in roster
             if e.slot not in INACTIVE_SLOTS
             and e.player.status not in OUT_STATUSES
             and e.player.key not in keep
+            and e.player.key not in drop_first
             and normalize_name(e.player.name) not in protected
         ),
         key=lambda e: (_ros(ros_values, e.player.key), e.player.key),
     )
     if stream_slots is not None:
-        return eligible[:stream_slots]
+        return [*chosen, *eligible][: max(stream_slots, len(chosen))]
     threshold = _best_fa_ros(ros_values, free_agents) + margin
     pool = [e for e in eligible if _ros(ros_values, e.player.key) <= threshold]
-    return (pool or eligible[:1])[:MAX_POOL]
+    if not chosen:
+        pool = pool or eligible[:1]
+    return [*chosen, *pool][: max(MAX_POOL, len(chosen))]
 
 
 def _best_fa_ros(ros_values: dict[str, float], free_agents: list[FreeAgent]) -> float:
@@ -486,25 +502,42 @@ def plan_adds(
     margin: float = 0.25,
     max_candidates: int = PLAN_CANDIDATES,
     target_cats: int | None = None,
+    build: Build | None = None,
+    drop_first: frozenset[str] = frozenset(),
 ) -> AddPlan:
-    """Dated plan by beam search over (day, add, drop) moves, scored by matchup win probability.
+    """Dated plan by beam search over (day, add, drop) moves, scored by the league's objective.
 
-    With `target_cats` the score is instead P(win at least that many categories), for a
-    user who wants a bigger win than the matchup needs (e.g. 6 of 9).
+    One-win leagues: matchup win probability. Categories leagues: build-weighted expected
+    categories won, as `rank_streamers` ranks them; every category counts in the
+    standings, so a matchup already likely won still has categories worth chasing, and
+    the adds left are chained over the days (today's best, then a swap for whoever fits
+    the next days). With `target_cats` the score is instead P(win at least that many
+    categories), for a user who wants a bigger win than the matchup needs (e.g. 6 of 9).
 
     An add counts from his move day on and the drop leaves only from that day, so a
     player who plays today is not dropped before he has played. A move can drop an
     earlier planned add after his last useful game. Waiver players can be claimed from
-    the day they clear. Conservative on purpose: a move must gain PLAN_MIN_GAIN, or only PLAN_FREE_GAIN when the
-    drop would not have started on any day he is gone; nothing above
-    replacement level is dropped, and a week already PLAN_SAFE likely won is left alone.
+    the day they clear. Conservative on purpose: a move must clear the objective's
+    minimum gain (lower when the drop would not have started on any day he is gone);
+    nothing above replacement level is dropped unless the user named him in
+    `drop_first` (player keys to drop first), and a one-win week already PLAN_SAFE is left alone.
     """
     base = analyze_week(ctx)
+    weights = category_weights(build or Build(), base.categories)
+    objective: Literal["categories", "one_win", "target"] = (
+        "target" if target_cats is not None else base.objective
+    )
+    min_gain, free_gain = (
+        (PLAN_MIN_GAIN_CATS, PLAN_FREE_GAIN_CATS) if objective == "categories"
+        else (PLAN_MIN_GAIN, PLAN_FREE_GAIN)
+    )
 
     def score(a: WeekAnalysis) -> float:
-        if target_cats is None:
-            return a.matchup_win_prob
-        return prob_at_least([o.win_prob for o in a.categories], target_cats)
+        if objective == "target":
+            return prob_at_least([o.win_prob for o in a.categories], target_cats or 0)
+        if objective == "categories":
+            return sum(weights.get(o.category, 0.0) * o.win_prob for o in a.categories)
+        return a.matchup_win_prob
 
     def plan(moves: list[PlannedMove], analysis: WeekAnalysis, reason: str | None) -> AddPlan:
         ordered = sorted(moves, key=lambda m: (m.on, m.add.key))
@@ -525,11 +558,12 @@ def plan_adds(
             target_cats=target_cats,
             base_target_prob=None if target_cats is None else score(base),
             target_prob=None if target_cats is None else score(analysis),
+            objective=objective,
         )
 
     if base.adds_left == 0:
         return plan([], base, "no adds left this week")
-    if target_cats is None and base.matchup_win_prob >= PLAN_SAFE:
+    if objective == "one_win" and base.matchup_win_prob >= PLAN_SAFE:
         return plan([], base, f"already {base.matchup_win_prob:.0%} to win: no move is worth a drop")
     if not pool:
         return plan([], base, "drop pool is empty")
@@ -573,20 +607,25 @@ def plan_adds(
                 for drop in state.droppable:
                     if state.added_on.get(drop.player.key, date.min) >= day:
                         continue  # an earlier add leaves only after the day he arrives
-                    if _ros(ctx.ros_values, drop.player.key) > threshold:
-                        continue  # above replacement level: never a stream's price
+                    if _ros(ctx.ros_values, drop.player.key) > threshold and drop.player.key not in drop_first:
+                        continue  # above replacement level: never a stream's price, unless the user chose him
                     swapped = _swap(state.current, drop, f.player, set(window), day)
                     if not _usable_slots(swapped, f.player.key, window):
                         continue
                     new = analyze_week(swapped)
                     gain = score(new) - score(state.analysis)
                     gives_up = any(drop.player.key in starting[d] for d in window)
-                    if gain < (PLAN_MIN_GAIN if gives_up else PLAN_FREE_GAIN):
+                    if gain < (min_gain if gives_up else free_gain):
                         continue  # not worth what the drop costs
                     options.append(((score(new), day.toordinal()), new, swapped, f, drop, day, starting))
         options.sort(key=lambda o: o[0], reverse=True)  # later wins a tie: more information
+        # One day per (add, drop): the same swap made on four different days would fill
+        # the beam with one idea and crowd out a chain (today's add, a swap later).
+        best_day: dict[tuple[str, str], tuple] = {}
+        for o in options:
+            best_day.setdefault((o[3].player.key, o[4].player.key), o)
         out = []
-        for _, new, swapped, f, drop, day, starting in options[:PLAN_EXPAND]:
+        for _, new, swapped, f, drop, day, starting in list(best_day.values())[:PLAN_EXPAND]:
             window = [d for d in days if d >= day]
             drop_ros = ctx.ros_values.get(drop.player.key)
             move = PlannedMove(

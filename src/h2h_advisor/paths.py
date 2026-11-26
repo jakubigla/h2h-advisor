@@ -21,5 +21,9 @@ def cache_db() -> Path:
     return _data_dir() / "cache.db"
 
 
+def notes_file() -> Path:
+    return _data_dir() / "notes.json"
+
+
 def config_file() -> Path:
     return home() / ".config" / "h2h-advisor" / "config.toml"

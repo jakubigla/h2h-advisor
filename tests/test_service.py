@@ -1294,3 +1294,80 @@ def test_recent_minutes_are_cached_per_player(make):
 def test_without_an_espn_source_nothing_changes(make):
     league = make().advisor.daily_brief([A], horizon="rest_of_week").data["leagues"][A]
     assert not any(f.startswith("Kept off the drop list") for f in league["facts"])
+
+
+# -- notes: the user's short-lived guidance ------------------------------------------
+
+
+def test_keep_note_protects_like_never_drop(make, monkeypatch):
+    monkeypatch.setattr("h2h_advisor.analysis.streamers.MIN_GAIN", 1e-9)
+    rig = make()
+    env = rig.advisor.add_note("keep", WING.name, "Hoops", "more minutes with the starter out")
+    assert env.data["note"].league == A  # a name part resolves to the league id
+    options = rig.advisor.rank_streamers(A, "rest_of_week").data["options"]
+    assert options
+    assert all(o.drop.key != WING.key for o in options)
+    # ...in that league only
+    other = rig.advisor.rank_streamers(B, "rest_of_week").data["options"]
+    assert any(o.drop.key == WING.key for o in other)
+
+
+def test_drop_first_note_beats_the_rotation_check(make, monkeypatch):
+    # Everyone plays 28 mpg: the pool is empty until the user names his drop.
+    monkeypatch.setattr("h2h_advisor.analysis.streamers.MIN_GAIN", 1e-9)  # Spare's swaps are small
+    rig = make(espn=FakeEspn(mpg=28.0))
+    league = rig.advisor.daily_brief([A], horizon="rest_of_week").data["leagues"][A]
+    assert league["streamer_reason"] == "drop pool is empty"
+    rig.advisor.add_note("drop_first", SPARE.name, A, "useless")
+    league = rig.advisor.daily_brief([A], horizon="rest_of_week").data["leagues"][A]
+    assert league["streamer_reason"] != "drop pool is empty"
+    assert {o.drop.key for o in league["streamers"]} == {SPARE.key}, league["streamer_reason"]
+    noted = next(f for f in league["facts"] if f.startswith("Your notes"))
+    assert "drop first Spare Guard" in noted and "useless" in noted
+
+
+def test_drop_first_wins_over_keep_and_never_drop(make, monkeypatch):
+    monkeypatch.setattr("h2h_advisor.analysis.streamers.MIN_GAIN", 1e-9)
+    rig = make(config=Config(never_drop=[SPARE.name]), espn=FakeEspn(mpg=28.0))
+    rig.advisor.add_note("drop_first", SPARE.name, A)
+    league = rig.advisor.daily_brief([A], horizon="rest_of_week").data["leagues"][A]
+    assert {o.drop.key for o in league["streamers"]} == {SPARE.key}, league["streamer_reason"]
+
+
+def test_notes_expire_and_can_be_removed(make):
+    rig = make()
+    keep = rig.advisor.add_note("keep", WING.name, "all", until=date(2026, 11, 29)).data["note"]
+    drop = rig.advisor.add_note("drop_first", SPARE.name, A).data["note"]
+    assert {n.id for n in rig.advisor.list_notes().data["active"]} == {keep.id, drop.id}
+    assert {n.id for n in rig.advisor.list_notes(B).data["active"]} == {keep.id}  # "all" applies
+    rig.advisor.remove_note(drop.id)
+    assert [n.id for n in rig.advisor.list_notes().data["active"]] == [keep.id]
+    rig.clock.advance(days=5)  # past Sun 29 Nov
+    assert rig.advisor.list_notes().data["active"] == []
+    with pytest.raises(ValueError, match="no note"):
+        rig.advisor.remove_note(drop.id)
+
+
+def test_unreadable_notes_are_a_notice_not_a_failed_brief(make, tmp_path):
+    from h2h_advisor import paths
+
+    paths.notes_file().parent.mkdir(parents=True, exist_ok=True)
+    paths.notes_file().write_text("{broken", encoding="utf-8")
+    brief = make().advisor.daily_brief([A], horizon="rest_of_week")
+    assert brief.data["leagues"][A]["analysis"] is not None
+    assert any(n.startswith("notes ignored") for n in brief.notices)
+
+
+def test_build_ros_leaves_punted_categories_out():
+    from h2h_advisor.service import _build_ros
+
+    blocker = {Category.BLK: 3.0, Category.REB: 1.5, Category.STL: 1.5, Category.PTS: -2.0,
+               Category.AST: -2.0, Category.FT_PCT: -2.0, Category.TPM: 0.0,
+               Category.FG_PCT: 0.0, Category.TO: 0.0}  # fmt: skip
+    values = {"blocker": sum(blocker.values()) / 9, "nocats": 0.4}
+    punt = frozenset({Category.PTS, Category.AST, Category.FT_PCT})
+    out = _build_ros(values, {"blocker": blocker}, punt)
+    assert values["blocker"] == pytest.approx(0.0)  # BBM's Value: a throwaway
+    assert out["blocker"] == pytest.approx(1.0)  # for a punt-PTS/AST/FT build: a keeper
+    assert out["nocats"] == 0.4
+    assert _build_ros(values, {"blocker": blocker}, frozenset())["blocker"] == pytest.approx(0.0)
