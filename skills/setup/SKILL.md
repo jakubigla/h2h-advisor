@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Set up or repair h2h-advisor - log in to Yahoo Fantasy and Basketball Monster, find the leagues, and write or edit the h2h-advisor config (never-drop players, league builds with punt/strong categories, stream slots, the Basketball Monster league id). Use for a first run, a "needs login" or "set bbm_league_id" notice, h2h-advisor tools that are missing or fail with a config error, a newly joined league, or any change to a league's season-long settings, even when the user never says "setup". Short-lived guidance on a player ("keep him while the starter is out") is a note for streaming-advisor, not config.
+description: Use when setting up or repairing h2h-advisor - log in to Yahoo Fantasy and Basketball Monster, find the leagues, and write or edit the h2h-advisor config (never-drop players, league builds with punt/strong categories, stream slots, the Basketball Monster league id). Use for a first run, a "needs login" or "set bbm_league_id" notice, h2h-advisor tools that are missing or fail with a config error, a newly joined league, or any change to a league's season-long settings, even when the user never says "setup". Short-lived guidance on a player ("keep him while the starter is out") is a note for streaming-advisor, not config.
 ---
 
 # h2h-advisor setup
