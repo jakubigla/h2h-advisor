@@ -1,6 +1,6 @@
 {
   "name": "h2h-advisor",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Read-only Yahoo Fantasy NBA head-to-head 9-cat advisor backed by Basketball Monster projections: status reports, streamers and long-term upgrades for all your leagues. It never changes anything on Yahoo or Basketball Monster.",
   "author": {
     "name": "Jakub Igla"
