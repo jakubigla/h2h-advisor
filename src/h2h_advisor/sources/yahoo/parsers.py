@@ -604,6 +604,24 @@ def parse_free_agents(
     return free_agents
 
 
+def parse_taken_players(html: str) -> list[Player]:
+    """Players on a players page filtered to taken (``status=T``): the Roster Status
+    column names the fantasy team, which nothing here needs."""
+    page = "players"
+    table = _players_table(_tree(html))
+    if not any(
+        _norm(th.text()).startswith("Roster Status") for th in table.css("thead th")
+    ):
+        raise ParseError(page, "missing 'Roster Status' column")
+    players = [
+        _parse_player(_need(row.css_first("td.player"), page, "player cell"), page)
+        for row in table.css("tbody tr")
+    ]
+    if not players:
+        raise ParseError(page, "players table has no rows")
+    return players
+
+
 def has_next_page(html: str) -> bool:
     """True when the players page links to a 'Next 25' page."""
     nav = _need(

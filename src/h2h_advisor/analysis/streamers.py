@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Literal
@@ -33,7 +34,6 @@ from h2h_advisor.models import (
 )
 from h2h_advisor.sources.schedule import Schedule
 
-CANDIDATE_LIMIT = 25
 MAX_POOL = 3  # most players a streaming move may drop, by default
 PLAN_CANDIDATES = 30  # free agents kept for the search, by what they add
 PLAN_BEAM = 3  # partial plans kept at each step of the search
@@ -482,9 +482,12 @@ def rank_streamers(
             windows[f.player.key] = window
             release[f.player.key] = max(start, f.waiver_clear) if f.on_waivers else start
             eligible.append(f)
+    # Every eligible free agent is scored: a cut by overall value before scoring hides the
+    # low-value player who fits this week (a wing for the one open SF slot, a rebounder
+    # when REB is the coin flip).
     candidates = sorted(
         eligible, key=lambda f: (-ctx.my_lineup_values.get(f.player.key, _NEG_INF), f.player.key)
-    )[:CANDIDATE_LIMIT]
+    )
 
     scoring = _Scoring(
         weights=category_weights(build, base.categories),
@@ -510,6 +513,11 @@ def rank_streamers(
     if not swaps:
         return [], "no move improves this week's outlook"
     swaps.sort(key=lambda s: _sort_key(s.option))
+    # follow-ups are tried in the order of what each free agent adds on his own
+    order = {key: i for i, key in enumerate(dict.fromkeys(s.option.add.key for s in swaps))}
+    candidates = sorted(
+        (f for f in candidates if f.player.key in order), key=lambda f: order[f.player.key]
+    )
 
     options = [s.option for s in swaps]
     if horizon == "rest_of_week" and adds_left_after >= 1:
@@ -669,7 +677,9 @@ def plan_adds(
         for o in options:
             best_day.setdefault((o[3].player.key, o[4].player.key), o)
         out = []
-        for _, new, swapped, f, drop, day, starting in list(best_day.values())[:PLAN_EXPAND]:
+        for _, new, swapped, f, drop, day, starting in _with_best_per_day(
+            list(best_day.values()), PLAN_EXPAND, lambda o: o[5]
+        ):
             window = [d for d in days if d >= day]
             drop_ros = ctx.ros_values.get(drop.player.key)
             move = PlannedMove(
@@ -708,10 +718,31 @@ def plan_adds(
                 nxt.setdefault(new_state.key, new_state)
         if not nxt:
             break
-        beam = sorted(nxt.values(), key=lambda st: rank(st.analysis), reverse=True)[:PLAN_BEAM]
+        beam = _with_best_per_day(
+            sorted(nxt.values(), key=lambda st: rank(st.analysis), reverse=True),
+            PLAN_BEAM,
+            lambda st: st.moves[-1].on,
+        )
         finished += beam
     best = max(finished, key=lambda st: (round(score(st.analysis), 6), -len(st.moves), tiebreak(st.analysis)))
     return plan(list(best.moves), best.analysis, None if best.moves else "no move improves this week's outlook")
+
+
+def _with_best_per_day[T](ranked: list[T], limit: int, day_of: Callable[[T], date]) -> list[T]:
+    """The first `limit` of `ranked` (best first), plus the best one of each move day they lack.
+
+    Moves on different days do not compete, they chain: Friday's wing can be swapped for
+    Saturday's centre, but once the centre is added on Saturday nothing can still be added
+    on Friday. Ranked by gain alone, the bigger later move crowds the earlier one out of the
+    search and the chain is never found.
+    """
+    kept = ranked[:limit]
+    days = {day_of(x) for x in kept}
+    for x in ranked[limit:]:
+        if day_of(x) not in days:
+            days.add(day_of(x))
+            kept.append(x)
+    return kept
 
 
 def _best_follow_up(

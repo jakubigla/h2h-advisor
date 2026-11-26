@@ -960,11 +960,33 @@ class Advisor:
             call.notice(f"matched {settings.name} ↔ BBM {options[bbm_id]}")
         return bbm_id
 
+    def _taken(self, call: _Call, lid: str, refresh: bool) -> list[Player] | None:
+        return self._get(
+            call, f"taken:{lid}", "free_agents", "yahoo", f"yahoo:taken:{lid}",
+            lambda: self._yahoo(call).taken(lid), _as(list[Player]), refresh,
+        )  # fmt: skip
+
     def _free_agents(
         self, call: _Call, lid: str, settings: LeagueSettings, refresh: bool
     ) -> list[FreeAgent] | None:
-        """BBM league view cross-checked with Yahoo waivers; Yahoo players pages when
-        the BBM league is unknown or its view unavailable."""
+        """Who is free is Yahoo's call: every BBM player (rest-of-season page) who is
+        not on a Yahoo roster, with Yahoo's waivers list for who must be claimed.
+
+        BBM's own league view only follows Yahoo when someone syncs it there by hand,
+        so it is the fallback (with a notice) when Yahoo's list of rostered players
+        cannot be read; Yahoo's players pages when BBM has nothing either.
+        """
+        taken = self._taken(call, lid, refresh)
+        if taken is not None:
+            ros = self._ros(call, refresh)
+            if ros is not None:
+                rows = self._not_taken(ros.rows, taken)
+                return self._merge_bbm_free_agents(call, lid, settings, rows, refresh)
+        else:
+            call.notice(
+                f"{settings.name}: Yahoo's list of rostered players is unavailable; "
+                "who is free comes from Basketball Monster, which can lag behind Yahoo"
+            )
         bbm_id = self._bbm_league_id(call, lid, settings, refresh)
         if bbm_id is not None:
             page = self._get(
@@ -972,7 +994,8 @@ class Advisor:
                 lambda: self._bbm(call).league_view(bbm_id), _as(BbmPage), refresh,
             )  # fmt: skip
             if page is not None:
-                return self._merge_bbm_free_agents(call, lid, settings, page, refresh)
+                rows = [r for r in page.rows if r.own in ("free_agent", "waivers")]
+                return self._merge_bbm_free_agents(call, lid, settings, rows, refresh)
         fas = self._get(
             call, f"free_agents:{lid}", "free_agents", "yahoo", f"yahoo:free_agents:{lid}",
             lambda: self._yahoo(call).free_agents(lid, limit=50), _as(list[FreeAgent]), refresh,
@@ -984,15 +1007,34 @@ class Advisor:
             merged.setdefault(w.player.key, w)
         return list(merged.values())
 
+    def _not_taken(self, rows: list[BbmRow], taken: list[Player]) -> list[BbmRow]:
+        """BBM rows of players on no Yahoo roster.
+
+        Yahoo's shortened names are reconciled to BBM's; a rostered player still
+        unmatched is looked up by name alone, so one BBM lists on another NBA team
+        (a trade Yahoo or BBM has not caught up with) is not shown as free.
+        """
+        by_key = {p.key: p for p in taken}
+        mapped = reconcile_keys(by_key, (r.projection.player_key for r in rows))
+        gone = set(mapped.values())
+        rest = {k: p for k, p in by_key.items() if k not in mapped}
+        return [
+            r
+            for r in rows
+            if r.projection.player_key not in gone
+            and self._index.match(r.projection.name, r.projection.nba_team, rest)
+            is None
+        ]
+
     def _merge_bbm_free_agents(
         self,
         call: _Call,
         lid: str,
         settings: LeagueSettings,
-        page: BbmPage,
+        rows: list[BbmRow],
         refresh: bool,
     ) -> list[FreeAgent]:
-        """BBM free agents and waiver players, with Yahoo's waivers list as authority.
+        """BBM rows of available players, with Yahoo's waivers list as authority.
 
         Every player on Yahoo's waivers page is on waivers with Yahoo's date, whatever
         BBM's Own column says. BBM's column lags: a BBM waiver player missing from a
@@ -1001,7 +1043,6 @@ class Advisor:
         Yahoo's player (positions, injury status) wins; the key stays BBM's so
         projections line up. Otherwise the injury status comes from BBM.
         """
-        rows = [r for r in page.rows if r.own in ("free_agent", "waivers")]
         waivers = self._waivers(call, lid, refresh)
         yahoo_waivers = {f.player.key: f for f in waivers or []}
         complete = waivers is not None and len(waivers) < WAIVERS_LIMIT

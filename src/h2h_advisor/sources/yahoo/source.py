@@ -15,6 +15,7 @@ from h2h_advisor.sources.yahoo.parsers import LeagueRef, ParseError
 
 SITE = "yahoo"
 WAIVERS_LIMIT = 2 * urls.PAGE_SIZE  # players read from the waivers list
+TAKEN_PAGES_MAX = 24  # 600 rostered players: more than any league holds
 
 
 class YahooSource:
@@ -113,6 +114,23 @@ class YahooSource:
 
         Fewer than WAIVERS_LIMIT means the list is complete."""
         return self._players(int(league_id), WAIVERS_LIMIT, None, "W")
+
+    def taken(self, league_id: str | int) -> list[Player]:
+        """Every player on a fantasy team's roster in the league (IL included), one
+        page load per 25. The whole list or an error: a list cut short would show
+        rostered players as free."""
+        league = int(league_id)
+        found: list[Player] = []
+        for page in range(TAKEN_PAGES_MAX):
+            html = self._get(
+                urls.free_agents(league, page * urls.PAGE_SIZE, status="T")
+            )
+            found.extend(self._rekey(p) for p in parsers.parse_taken_players(html))
+            if not parsers.has_next_page(html):
+                return found
+        raise ParseError(
+            "players", f"taken list runs past {TAKEN_PAGES_MAX} pages; not read whole"
+        )
 
     def _players(
         self, league: int, limit: int, position: str | None, status: str

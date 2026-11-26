@@ -93,6 +93,15 @@ group it belongs to (or a new group). Keep it to a line or two; put lookups in `
 - **Present every move of the plan; never cut one as small.** The planner already applied its
   own bars. A swap that drops this week's streamer (Sat: a C for the SF added Fri) uses an add
   that is lost otherwise, so +0.02 is a real gain, not noise.
+- **A player the user names but the lists lack has not been scored: score him before judging.**
+  Call `rank_streamers(league, horizon="rest_of_week", max_results=50)` and quote his row; the
+  default lists show only the top few, so absence is not a low gain. Only when he is missing
+  from that call too, say why (no usable slot, no game left, out, taken).
+- **A day is full per position, never in total.** Seven bigs for PF, F, C and Util leave SF and
+  the guard slots empty, so a wing plays on a day the bigs overflow. Read `slot_by_day`; never
+  infer open or full days from the number of teams playing.
+- **When the user says a player is taken or free, believe them over the list** and drop him from
+  (or add him to) the answer. Yahoo's rosters decide; a list cached up to an hour can be behind.
 - **Never defend a skipped swap by "it gives up his game", "it's small" or "it was scored with
   another add".** The gain is already net of the game given up. When the user proposes a swap
   the plan lacks, score it before answering.

@@ -1081,3 +1081,33 @@ def test_a_free_drop_needs_a_smaller_gain_than_a_costly_one(monkeypatch, scoring
     assert [m.drop.key for m in free.moves] == ["D"]
     costly = plan_adds(ctx, fas, [ctx.my_roster[0]])  # M1 starts every day: dropping him costs games
     assert costly.moves == []
+
+
+def test_every_eligible_free_agent_is_scored_not_only_the_best_by_value():
+    # 30 free agents of higher overall value who add next to nothing, and a low-valued one
+    # who fits the week. A cut by value before scoring (the top 25) never saw him.
+    fa_days = {f"star{i}": [day(0)] for i in range(30)} | {"fit": [day(0)]}
+    per_game = {f"star{i}": StatLine(pts=0.1) for i in range(30)} | {"fit": AVG}
+    values = {f"star{i}": 5.0 + i for i in range(30)} | {"fit": -3.0}
+    ctx, fas, pool = streaming_ctx(fa_days, fa_per_game=per_game, fa_values=values)
+    options, _ = rank_streamers(ctx, fas, pool, "rest_of_week", NO_BUILD, max_results=3)
+    assert options[0].add.key == "fit"
+
+
+def test_plan_finds_an_early_add_that_a_bigger_later_add_replaces():
+    # "wing" plays only day 0, five "bigs" only day 1, each adding more than he does. Moves
+    # on different days chain (wing on day 0, then the best big for him on day 1), but
+    # ranked by gain alone the bigs fill the search and the wing's game is never played.
+    bigs = {f"big{i}": [day(1)] for i in range(5)}
+    ctx, fas, pool = streaming_ctx(
+        {"wing": [day(0)]} | bigs,
+        fa_per_game={"wing": StatLine(ast=2.0)}
+        | {f"big{i}": StatLine(ast=4.0 - i * 0.2) for i in range(5)},
+        my_totals=_LOCKED,
+        opp_totals=_AST_LEAD,
+    )
+    plan = plan_adds(ctx, fas, pool)
+    assert [(m.on, m.add.key, m.drop.key) for m in plan.moves] == [
+        (day(0), "wing", "D"),
+        (day(1), "big0", "wing"),
+    ]
