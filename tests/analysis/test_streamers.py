@@ -1111,3 +1111,33 @@ def test_plan_finds_an_early_add_that_a_bigger_later_add_replaces():
         (day(0), "wing", "D"),
         (day(1), "big0", "wing"),
     ]
+
+
+def test_plan_finds_a_chain_that_starts_with_a_move_ranked_below_many_near_equal_ones():
+    # A wing on day 0, six centres on day 1 (near equal), a guard on day 2. "G1", a weak
+    # roster guard, holds the only PG slot on day 2. Best: the wing for D, the best centre
+    # for G1 (not for the wing: that leaves G1 in the guard's way), then the guard for a
+    # spent streamer. "Centre for G1" ranks below all six "centre for the wing" moves, so a
+    # search that keeps only a few moves per step never tries it.
+    centres = {f"c{i}": [day(1)] for i in range(6)}
+    fa_days = {"wing": [day(0)], "guard": [day(2)]} | centres
+    positions = {"wing": ("SF",), "guard": ("PG",)} | {k: ("C",) for k in centres}
+    per_game = {"M1": AVG, "O1": AVG, "D": AVG, "G1": StatLine(ast=1.0), "wing": StatLine(ast=2.0),
+                "guard": StatLine(ast=2.5)} | {f"c{i}": StatLine(ast=4.0 - i * 0.1) for i in range(6)}
+    team_days = {"MMM": WEEK_DAYS, "OOO": WEEK_DAYS, "DDD": [], "GGG": [day(2)]}
+    ctx = make_ctx(
+        my_roster=[entry("M1", "MMM", ("Util",)), entry("D", "DDD"), entry("G1", "GGG")],
+        opp_roster=[entry("O1", "OOO")],
+        per_game=per_game,
+        values={"M1": 10.0, "O1": 10.0, "D": 0.0, "G1": 5.0} | {k: 1.0 for k in fa_days},
+        schedule=make_schedule(team_days | {k.upper(): d for k, d in fa_days.items()}),
+        my_totals=_LOCKED,
+        opp_totals=_AST_LEAD,
+        moves_used=4,
+        roster_slots={"PG": 1, "SF": 1, "C": 1, "Util": 1, "BN": 3},
+    )
+    fas = [fa(k, k.upper(), positions[k]) for k in fa_days]
+    plan = plan_adds(ctx, fas, [ctx.my_roster[1], ctx.my_roster[2]])
+    moves = [(m.on, m.add.key, m.drop.key) for m in plan.moves]
+    assert moves[:2] == [(day(0), "wing", "D"), (day(1), "c0", "G1")]
+    assert [(on, add) for on, add, _ in moves[2:]] == [(day(2), "guard")]
