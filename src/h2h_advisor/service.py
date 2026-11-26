@@ -456,7 +456,9 @@ class Advisor:
                 call, _streamer_data(options, reason, fas, week.settings, build)
             )
 
-    def plan_adds(self, league: str, refresh: bool = False) -> Envelope:
+    def plan_adds(
+        self, league: str, refresh: bool = False, target_cats: int | None = None
+    ) -> Envelope:
         """Dated add/drop plan for the rest of the week (moves dated today are "do now")."""
         with self._calling() as call:
             lid = self._resolve(call, league)
@@ -469,7 +471,8 @@ class Advisor:
             if week is None or fas is None:
                 return self._envelope(call, None)
             plan = plan_adds_ctx(
-                week.ctx, fas, self._pool(lid, week, fas), self._config.drop_margin
+                week.ctx, fas, self._pool(lid, week, fas), self._config.drop_margin,
+                target_cats=target_cats,
             )
             claims = _claims(fas, [m.add.key for m in plan.moves], week.settings)
             return self._envelope(call, {"plan": plan, "claims": claims})
