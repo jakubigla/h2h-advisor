@@ -566,14 +566,16 @@ def _scenario(scoring_type):
     return ctx, fas, pool
 
 
-def test_one_win_prefers_the_swing_flip_over_scattered_gains():
+def test_both_objectives_prefer_the_swing_flip_over_scattered_gains():
+    # A's gains are in categories at ~5% (one punted): 5% to 9% is noise, not a category
+    # within reach, so a categories league no longer adds them up past B's AST flip either.
     top = {}
     for scoring_type in ("categories", "one_win"):
         ctx, fas, pool = _scenario(scoring_type)
         options, reason = rank_streamers(ctx, fas, pool, "today", PUNT_BLK)
         assert reason is None
         top[scoring_type] = options[0]
-    assert top["categories"].add.key == "a"
+    assert top["categories"].add.key == "b"
     assert top["one_win"].add.key == "b"
 
 
@@ -1015,6 +1017,25 @@ def test_a_streamer_is_swapped_for_a_better_fit_on_a_day_he_plays(monkeypatch, s
         (day(2), "late", "early"),
     ]
     assert plan.moves[1].drop_days_given_up == [day(2)]
+
+
+def test_a_category_already_decided_this_week_is_no_reason_to_add():
+    # STL is 94% won (likely_win, not a strong category), AST a coin flip. "thief" only adds
+    # steals: pushing a won category to 99% is no reason to spend an add, and it must not
+    # outrank the swing-category fit (a SF's PTS and TPM, out of reach, outranked the
+    # REB fit and broke the Fri add / Sat swap chain).
+    ctx, fas, pool = streaming_ctx(
+        {"thief": WEEK_DAYS, "fit": WEEK_DAYS},
+        fa_per_game={"thief": StatLine(stl=3.0), "fit": StatLine(ast=1.5)},
+        my_totals=replace(_LOCKED, stl=14, ast=40),
+        opp_totals=StatLine(stl=10, ast=40),
+    )
+    statuses = {o.category: o.status for o in analyze_week(ctx).categories}
+    assert (statuses[C.STL], statuses[C.AST]) == ("likely_win", "swing")
+    options, _ = rank_streamers(ctx, fas, pool, "rest_of_week", NO_BUILD)
+    assert [o.add.key for o in options] == ["fit"]
+    plan = plan_adds(ctx, fas, pool, build=NO_BUILD)
+    assert [m.add.key for m in plan.moves] == ["fit"]
 
 
 def test_categories_plan_gives_no_credit_for_a_punted_category():

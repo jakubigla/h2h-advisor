@@ -8,6 +8,8 @@ from typing import Literal
 
 from h2h_advisor.analysis.build import Build, category_weights
 from h2h_advisor.analysis.outlook import (
+    LIKELY_LOSS,
+    LIKELY_WIN,
     WeekAnalysis,
     WeekContext,
     analyze_week,
@@ -69,7 +71,7 @@ class StreamerOption:
     slot_by_day: dict[date, str]
     raw_games: int
     light_days: list[date]
-    delta_expected_cats: float  # build-weighted, filled for both scoring types
+    delta_expected_cats: float  # weighted, categories in play only (`in_play`); both scoring types
     per_cat_delta: dict[Category, float]  # unweighted
     adds_left_after: int
     objective: Literal["categories", "one_win"]
@@ -306,11 +308,22 @@ def _swap(
     return replace(ctx, my_roster=[*ctx.my_roster, RosterEntry(add, "BN")], active_days=active_days)
 
 
+def in_play(win_prob: float) -> float:
+    """A category's win probability as this week's adds can use it: clamped to the swing band.
+
+    Below LIKELY_LOSS a category is out of reach and above LIKELY_WIN it is won: 1% to 5% in
+    TPM, or 94% to 99% in STL, is model noise, not a category gained, and no reason to spend
+    an add. A move that brings a category into the band (8% to 40% REB) still counts from 10%.
+    """
+    return min(max(win_prob, LIKELY_LOSS), LIKELY_WIN)
+
+
 def _weighted(weights: dict[Category, float], new: WeekAnalysis, base: WeekAnalysis) -> tuple[float, dict]:
-    per_cat = {
-        n.category: n.win_prob - b.win_prob for n, b in zip(new.categories, base.categories, strict=True)
-    }
-    return sum(weights.get(c, 0.0) * d for c, d in per_cat.items()), per_cat
+    """Weighted gain in expected categories still in play (`in_play`), and the raw per-category deltas."""
+    pairs = list(zip(new.categories, base.categories, strict=True))
+    per_cat = {n.category: n.win_prob - b.win_prob for n, b in pairs}
+    gain = sum(weights.get(n.category, 0.0) * (in_play(n.win_prob) - in_play(b.win_prob)) for n, b in pairs)
+    return gain, per_cat
 
 
 def _games(ctx: WeekContext, team: str, days: list[date]) -> list[date]:
@@ -446,7 +459,8 @@ def rank_streamers(
 ) -> tuple[list[StreamerOption], str | None]:
     """Best (add, drop) pairs for the horizon, scored by the league's objective.
 
-    Categories leagues: build-weighted change in expected categories won. One-win
+    Categories leagues: change in expected categories won, counting only the categories
+    still in play this week (not punted, each clamped to the swing band by `in_play`). One-win
     leagues: change in matchup win probability, punted categories frozen at their
     current win probability.
     """
@@ -525,8 +539,8 @@ def plan_adds(
 ) -> AddPlan:
     """Dated plan by beam search over (day, add, drop) moves, scored by the league's objective.
 
-    One-win leagues: matchup win probability. Categories leagues: build-weighted expected
-    categories won, as `rank_streamers` ranks them; every category counts in the
+    One-win leagues: matchup win probability. Categories leagues: expected categories won
+    in the categories still in play (`in_play`), as `rank_streamers` ranks them; every category counts in the
     standings, so a matchup already likely won still has categories worth chasing, and
     the adds left are chained over the days (today's best, then a swap for whoever fits
     the next days). With `target_cats` the score is instead P(win at least that many
@@ -554,8 +568,16 @@ def plan_adds(
         if objective == "target":
             return prob_at_least([o.win_prob for o in a.categories], target_cats or 0)
         if objective == "categories":
-            return sum(weights.get(o.category, 0.0) * o.win_prob for o in a.categories)
+            return sum(weights.get(o.category, 0.0) * in_play(o.win_prob) for o in a.categories)
         return a.matchup_win_prob
+
+    def tiebreak(a: WeekAnalysis) -> float:
+        """Raw expected categories: among plans `in_play` scores alike (a category past 90%
+        either way), the one with more games wins (Sat's swap, not Sun's that skips a game)."""
+        return sum(weights.get(o.category, 0.0) * o.win_prob for o in a.categories)
+
+    def rank(a: WeekAnalysis) -> tuple[float, float]:
+        return round(score(a), 9), tiebreak(a)
 
     def plan(moves: list[PlannedMove], analysis: WeekAnalysis, reason: str | None) -> AddPlan:
         ordered = sorted(moves, key=lambda m: (m.on, m.add.key))
@@ -639,8 +661,8 @@ def plan_adds(
                         bar = min_gain if gives_up else free_gain
                     if gain < bar:
                         continue  # not worth what the drop costs
-                    options.append(((score(new), day.toordinal()), new, swapped, f, drop, day, starting))
-        options.sort(key=lambda o: o[0], reverse=True)  # later wins a tie: more information
+                    options.append(((*rank(new), day.toordinal()), new, swapped, f, drop, day, starting))
+        options.sort(key=lambda o: o[0], reverse=True)  # later wins a full tie: more information
         # One day per (add, drop): the same swap made on four different days would fill
         # the beam with one idea and crowd out a chain (today's add, a swap later).
         best_day: dict[tuple[str, str], tuple] = {}
@@ -686,9 +708,9 @@ def plan_adds(
                 nxt.setdefault(new_state.key, new_state)
         if not nxt:
             break
-        beam = sorted(nxt.values(), key=lambda st: -score(st.analysis))[:PLAN_BEAM]
+        beam = sorted(nxt.values(), key=lambda st: rank(st.analysis), reverse=True)[:PLAN_BEAM]
         finished += beam
-    best = max(finished, key=lambda st: (round(score(st.analysis), 6), -len(st.moves)))
+    best = max(finished, key=lambda st: (round(score(st.analysis), 6), -len(st.moves), tiebreak(st.analysis)))
     return plan(list(best.moves), best.analysis, None if best.moves else "no move improves this week's outlook")
 
 
