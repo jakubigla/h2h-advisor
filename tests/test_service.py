@@ -1344,6 +1344,23 @@ def test_drop_first_note_beats_the_rotation_check(make, monkeypatch):
     assert "drop first Spare Guard" in noted and "useless" in noted
 
 
+def test_drop_first_player_scores_nothing_for_the_rest_of_the_week(make):
+    # "Useless, even with his Saturday game": the user will not start him, so his
+    # remaining games neither count as is nor are lost when an add replaces him.
+    rig = make()
+    before = rig.advisor.analyze_week(A).data["analysis"]
+    rig.advisor.add_note("drop_first", SPARE.name, A, "useless")
+    with rig.advisor._calling() as call:
+        week = rig.advisor._week(call, A, "rest_of_week", False)
+    assert week.ctx.active_days[SPARE.key] == set()
+    after = rig.advisor.analyze_week(A).data["analysis"]
+    assert after.my_proj.pts < before.my_proj.pts
+    # ...in that league only
+    with rig.advisor._calling() as call:
+        other = rig.advisor._week(call, B, "rest_of_week", False)
+    assert other.ctx.active_days[SPARE.key]
+
+
 def test_drop_first_wins_over_keep_and_never_drop(make, monkeypatch):
     monkeypatch.setattr("h2h_advisor.analysis.streamers.MIN_GAIN", 1e-9)
     rig = make(config=Config(never_drop=[SPARE.name]), espn=FakeEspn(mpg=28.0))

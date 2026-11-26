@@ -106,7 +106,7 @@ group it belongs to (or a new group). Keep it to a line or two; put lookups in `
   Put their reason in `reason`; `until` = the matchup week's last day for "this week", else the
   default two weeks. Say what you stored and until when. The engine follows active notes (a
   kept player is never a drop; a drop-first player is offered first, even above replacement
-  level), and the brief's fact "Your notes" lists them: mention one ending within 2 days so the
+  level, and his remaining games count for nothing), and the brief's fact "Your notes" lists them: mention one ending within 2 days so the
   user can renew it. `never_drop` in config (via `/h2h-advisor:setup`) is only for players the
   user wants protected all season.
 - **Chain the adds; adds left are use-it-or-lose-it.** A streamer whose games are played is

@@ -49,7 +49,9 @@
 - A note: `id`, `kind` (`keep` | `drop_first`), `player`, `league` (id or `all`), `reason`,
   `created`, `until` (last day it counts). `add_note` returns the `note` and every `active` note.
 - A new note on the same player and league replaces the old one (the user's last word counts).
-  A `drop_first` note beats a `keep` note and `never_drop` for that player.
+  A `drop_first` note beats a `keep` note and `never_drop` for that player, and his remaining
+  games this week count for nothing: the as-is outlook leaves them out, and an add that takes
+  his place loses none of them.
 - Notes write only a local file; nothing on Yahoo changes.
 
 ## Upgrades (`long_term_upgrades(`)

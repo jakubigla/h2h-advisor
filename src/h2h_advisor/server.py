@@ -341,7 +341,8 @@ def _note_tool(title: str, description: str, *, idempotent: bool) -> Any:
     "Remember the user's guidance on one player so every later analysis follows it. "
     "kind 'keep': never offered as a drop (e.g. 'keep him while the starter is out'); "
     "'drop_first': offered first as a drop, even above replacement level or playing "
-    "more minutes than projected ('he is useless'). league is a league name or id, "
+    "more minutes than projected, and his remaining games this week count for nothing "
+    "('he is useless'). league is a league name or id, "
     "or 'all'. until (YYYY-MM-DD) is the last day it counts; default two weeks, use "
     "the matchup week's end for 'this week'. A new note on the same player and league "
     "replaces the old one.",

@@ -27,7 +27,7 @@ ALL_LEAGUES = "all"
 @dataclass(frozen=True)
 class Note:
     id: int
-    kind: NoteKind  # keep: never offered as a drop; drop_first: offered first, whatever his value
+    kind: NoteKind  # keep: never offered as a drop; drop_first: offered first, whatever his value; his games score nothing
     player: str  # as the user named him; matched by normalised name
     league: str  # league id, or ALL_LEAGUES
     reason: str  # the user's reason, shown back with the note

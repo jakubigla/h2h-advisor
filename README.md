@@ -290,7 +290,8 @@ reconnect it (`/mcp` in Claude Code) or restart Claude Desktop.
 `never_drop` is for players protected all season. Guidance that goes stale ("keep the backup big
 while the starter is out", "the bench wing is useless, drop him first") is a **note**: tell Claude in conversation and it
 stores one with `add_note`. A `keep` note takes the player off the drop list; a `drop_first` note
-offers him first, even above replacement level. Each note has a last day (two weeks by default,
+offers him first, even above replacement level, and counts none of his remaining games this
+week. Each note has a last day (two weeks by default,
 the week's end for "this week") and stops counting after it. Notes live in
 `~/.local/share/h2h-advisor/notes.json`, are read on every call (no reconnect needed), and the
 brief lists the active ones. `list_notes` and `remove_note` show and forget them.
