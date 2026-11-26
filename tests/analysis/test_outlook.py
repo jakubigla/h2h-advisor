@@ -8,6 +8,7 @@ from h2h_advisor.analysis.outlook import (
     analyze_week,
     category_win_prob,
     matchup_win_prob,
+    prob_at_least,
     remaining_days,
 )
 from h2h_advisor.models import (
@@ -225,6 +226,20 @@ def test_only_league_categories_in_order():
 )
 def test_matchup_win_prob(probs, expected):
     assert matchup_win_prob(probs) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("probs", "k", "expected"),
+    [
+        ([0.5] * 9, 5, 0.5),  # the same event as winning a 9-category matchup
+        ([0.5] * 2, 2, 0.25),
+        ([0.9] * 3, 3, 0.729),
+        ([0.5] * 9, 0, 1.0),
+        ([0.5] * 9, 10, 0.0),
+    ],
+)
+def test_prob_at_least(probs, k, expected):
+    assert prob_at_least(probs, k) == pytest.approx(expected)
 
 
 @pytest.mark.parametrize("scoring_type", ["categories", "one_win"])

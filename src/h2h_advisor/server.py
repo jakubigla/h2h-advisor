@@ -230,10 +230,12 @@ def rank_streamers(
     "Plan adds",
     "Dated add/drop plan for the rest of the week in one league: which day to make "
     "each move so the dropped player plays until then and the add counts from his "
-    "first useful game. Moves dated today are 'do now'; the rest are for planning.",
+    "first useful game. Moves dated today are 'do now'; the rest are for planning. "
+    "Pass target_cats (e.g. 6) to rank moves by the chance of winning at least that "
+    "many categories instead of the chance of winning the matchup.",
 )
-def plan_adds(league: str, refresh: bool = False) -> dict[str, Any]:
-    return _respond("plan_adds", league=league, refresh=refresh)
+def plan_adds(league: str, refresh: bool = False, target_cats: int | None = None) -> dict[str, Any]:
+    return _respond("plan_adds", league=league, refresh=refresh, target_cats=target_cats)
 
 
 @_tool(

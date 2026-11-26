@@ -788,6 +788,22 @@ def test_plan_beats_the_frozen_roster_and_dates_the_move():
     assert plan.matchup_win_prob > plan.base_win_prob
 
 
+def test_plan_can_be_ranked_by_the_chance_of_a_bigger_win():
+    ctx, fas, pool = streaming_ctx({"early": [day(0), day(1), day(2)]}, fa_values={"early": 2.0})
+    plain = plan_adds(ctx, fas, pool)
+    assert plain.target_cats is None and plain.target_prob is None
+    plan = plan_adds(ctx, fas, pool, target_cats=6)
+    assert plan.target_cats == 6
+    assert plan.target_prob >= plan.base_target_prob
+
+
+def test_plan_target_is_not_cut_short_by_a_week_that_is_already_safe():
+    # a week already "safe" to win is still worth improving when the goal is a bigger win
+    ctx, fas, pool = streaming_ctx({"early": [day(0), day(1), day(2)]}, fa_values={"early": 2.0})
+    plan = plan_adds(ctx, fas, pool, target_cats=9)
+    assert plan.reason is None or "already" not in plan.reason
+
+
 def test_plan_without_adds_is_the_base_outlook():
     ctx, fas, pool = streaming_ctx({"early": [day(0), day(1)]}, moves_used=7)
     plan = plan_adds(ctx, fas, pool)
@@ -906,3 +922,22 @@ def test_activation_never_drops_a_kept_rotation_player():
     ctx = _il_ctx("Q")
     _, plan = activate_il(ctx, "mine", keep=frozenset({"D"}))
     assert [(a.key, d.key) for a, d in plan] == [("B", "M1")]
+
+
+def test_plan_scores_a_lower_valued_player_who_plays_on_the_day():
+    # 30 better free agents have no game left; the low-valued one plays from day 0.
+    # Ranking by value before looking at the schedule would never score him.
+    fa_days = {f"star{i}": [] for i in range(30)} | {"modest": [day(0), day(1), day(2)]}
+    values = {f"star{i}": 5.0 + i for i in range(30)} | {"modest": 0.5}
+    ctx, fas, pool = streaming_ctx(fa_days, fa_values=values)
+    plan = plan_adds(ctx, fas, pool, max_candidates=5)
+    assert [m.add.key for m in plan.moves] == ["modest"]
+
+
+def test_a_free_drop_needs_a_smaller_gain_than_a_costly_one(monkeypatch):
+    monkeypatch.setattr(streamers, "PLAN_MIN_GAIN", 1.0)  # impossible: a costly drop never qualifies
+    ctx, fas, pool = streaming_ctx({"mild": [day(0), day(1), day(2)]}, fa_values={"mild": 1.0})
+    free = plan_adds(ctx, fas, pool)  # the pool is D, who never plays: his drop is free
+    assert [m.drop.key for m in free.moves] == ["D"]
+    costly = plan_adds(ctx, fas, [ctx.my_roster[0]])  # M1 starts every day: dropping him costs games
+    assert costly.moves == []

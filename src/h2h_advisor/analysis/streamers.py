@@ -12,6 +12,7 @@ from h2h_advisor.analysis.outlook import (
     WeekContext,
     analyze_week,
     matchup_win_prob,
+    prob_at_least,
     remaining_days,
 )
 from h2h_advisor.analysis.projection import (
@@ -31,8 +32,11 @@ from h2h_advisor.models import (
 
 CANDIDATE_LIMIT = 25
 MAX_POOL = 3  # most players a streaming move may drop, by default
-PLAN_CANDIDATES = 15
-PLAN_MIN_GAIN = 0.03  # a planned move must add this much win probability
+PLAN_CANDIDATES = 30  # free agents kept for the search, by what they add
+PLAN_BEAM = 3  # partial plans kept at each step of the search
+PLAN_EXPAND = 4  # next moves tried from each of them
+PLAN_MIN_GAIN = 0.03  # a move that gives up games must add this much win probability
+PLAN_FREE_GAIN = 0.01  # a move that gives up none (the drop would not have started) only this much
 PLAN_SAFE = 0.90  # at or above this the week is safe: no moves worth a drop
 ACTIVATION_POOL = 4  # weakest roster players (by ROS) considered to make room for an IL return
 FOLLOW_UP_OPTIONS = 5
@@ -84,6 +88,22 @@ class PlannedMove:
     claim: bool = False  # the add is on waivers: a claim that clears on or before `on`
 
 
+@dataclass
+class _PlanState:
+    """A partial plan of the beam search: the moves so far and the roster they leave."""
+
+    analysis: WeekAnalysis
+    current: WeekContext
+    candidates: tuple[FreeAgent, ...]
+    droppable: tuple[RosterEntry, ...]
+    added_on: dict[str, date]
+    moves: tuple[PlannedMove, ...]
+
+    @property
+    def key(self) -> frozenset:
+        return frozenset((m.on, m.add.key, m.drop.key) for m in self.moves)
+
+
 @dataclass(frozen=True)
 class AddPlan:
     """Dated plan for the adds left: what to do today, what to prepare for later days."""
@@ -96,6 +116,9 @@ class AddPlan:
     adds_used: int
     moves: list[PlannedMove]  # in date order; those dated today are "do now"
     reason: str | None = None  # why there are no moves, when there are none
+    target_cats: int | None = None  # the plan was ranked by P(at least this many categories)
+    base_target_prob: float | None = None  # P(at least target_cats) with no move
+    target_prob: float | None = None  # ... after every planned move
 
 
 @dataclass(frozen=True)
@@ -462,16 +485,26 @@ def plan_adds(
     pool: list[RosterEntry],
     margin: float = 0.25,
     max_candidates: int = PLAN_CANDIDATES,
+    target_cats: int | None = None,
 ) -> AddPlan:
-    """Greedy dated plan: each step is the best (day, add, drop) by matchup win probability.
+    """Dated plan by beam search over (day, add, drop) moves, scored by matchup win probability.
+
+    With `target_cats` the score is instead P(win at least that many categories), for a
+    user who wants a bigger win than the matchup needs (e.g. 6 of 9).
 
     An add counts from his move day on and the drop leaves only from that day, so a
     player who plays today is not dropped before he has played. A move can drop an
     earlier planned add after his last useful game. Waiver players can be claimed from
-    the day they clear. Conservative on purpose: steps stop when none gains PLAN_MIN_GAIN, nothing above
+    the day they clear. Conservative on purpose: a move must gain PLAN_MIN_GAIN, or only PLAN_FREE_GAIN when the
+    drop would not have started on any day he is gone; nothing above
     replacement level is dropped, and a week already PLAN_SAFE likely won is left alone.
     """
     base = analyze_week(ctx)
+
+    def score(a: WeekAnalysis) -> float:
+        if target_cats is None:
+            return a.matchup_win_prob
+        return prob_at_least([o.win_prob for o in a.categories], target_cats)
 
     def plan(moves: list[PlannedMove], analysis: WeekAnalysis, reason: str | None) -> AddPlan:
         ordered = sorted(moves, key=lambda m: (m.on, m.add.key))
@@ -489,72 +522,113 @@ def plan_adds(
             adds_used=len(moves),
             moves=numbered,
             reason=reason,
+            target_cats=target_cats,
+            base_target_prob=None if target_cats is None else score(base),
+            target_prob=None if target_cats is None else score(analysis),
         )
 
     if base.adds_left == 0:
         return plan([], base, "no adds left this week")
-    if base.matchup_win_prob >= PLAN_SAFE:
+    if target_cats is None and base.matchup_win_prob >= PLAN_SAFE:
         return plan([], base, f"already {base.matchup_win_prob:.0%} to win: no move is worth a drop")
     if not pool:
         return plan([], base, "drop pool is empty")
     days = _horizon_days(ctx, "rest_of_week")
     threshold = _best_fa_ros(ctx.ros_values, free_agents) + margin
-    candidates = sorted(
+    eligible = sorted(
         (f for f in free_agents if f.player.status not in OUT_STATUSES and (not f.on_waivers or f.waiver_clear)),
         key=lambda f: (-ctx.my_lineup_values.get(f.player.key, _NEG_INF), f.player.key),
-    )[:max_candidates]
+    )
+    # Candidates are ranked by what they would actually add to this lineup on the day they
+    # would arrive (against each drop in the pool), not by overall value: a player with a
+    # better schedule beats a better player with fewer games left. Anyone who adds nothing
+    # is left out.
+    scored: list[tuple[float, str, FreeAgent]] = []
+    for f in eligible:
+        first = max(days[0], f.waiver_clear) if f.on_waivers else days[0]
+        best_gain = 0.0
+        for day in (d for d in days if d >= first and _games(ctx, f.player.nba_team, [x for x in days if x >= d])):
+            window = [d for d in days if d >= day]
+            for drop in pool:
+                swapped = _swap(ctx, drop, f.player, set(window), day)
+                if _usable_slots(swapped, f.player.key, window):
+                    best_gain = max(best_gain, score(analyze_week(swapped)) - score(base))
+        if best_gain > 0:
+            scored.append((best_gain, f.player.key, f))
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    candidates = [f for _, _, f in scored[:max_candidates]]
 
-    current, analysis = ctx, base
-    droppable = list(pool)
-    added_on: dict[str, date] = {}
-    moves: list[PlannedMove] = []
-    for _ in range(base.adds_left):
-        best: tuple[tuple[float, int], WeekAnalysis, WeekContext, FreeAgent, RosterEntry, date] | None = None
-        for f in candidates:
+    def expand(state: _PlanState) -> list[_PlanState]:
+        """The best few next moves from `state`, each as a new state."""
+        starting = lineup_by_day(
+            state.current.my_roster, state.current.per_game, state.current.my_lineup_values,
+            state.current.schedule, days, state.current.settings.roster_slots,
+            active_days=state.current.active_days,
+        )
+        options = []
+        for f in state.candidates:
             first = max(days[0], f.waiver_clear) if f.on_waivers else days[0]
             for day in (d for d in days if d >= first and _games(ctx, f.player.nba_team, [x for x in days if x >= d])):
                 window = [d for d in days if d >= day]
-                for drop in droppable:
-                    if added_on.get(drop.player.key, date.min) >= day:
+                for drop in state.droppable:
+                    if state.added_on.get(drop.player.key, date.min) >= day:
                         continue  # an earlier add leaves only after the day he arrives
                     if _ros(ctx.ros_values, drop.player.key) > threshold:
                         continue  # above replacement level: never a stream's price
-                    swapped = _swap(current, drop, f.player, set(window), day)
+                    swapped = _swap(state.current, drop, f.player, set(window), day)
                     if not _usable_slots(swapped, f.player.key, window):
                         continue
                     new = analyze_week(swapped)
-                    score = (new.matchup_win_prob, day.toordinal())  # later wins a tie: more information
-                    if best is None or score > best[0]:
-                        best = (score, new, swapped, f, drop, day)
-        if best is None or best[1].matchup_win_prob - analysis.matchup_win_prob < PLAN_MIN_GAIN:
-            break
-        _, new, swapped, f, drop, day = best
-        window = [d for d in days if d >= day]
-        lineup = lineup_by_day(
-            current.my_roster, current.per_game, current.my_lineup_values, current.schedule,
-            window, current.settings.roster_slots, active_days=current.active_days,
-        )
-        drop_ros = ctx.ros_values.get(drop.player.key)
-        moves.append(
-            PlannedMove(
+                    gain = score(new) - score(state.analysis)
+                    gives_up = any(drop.player.key in starting[d] for d in window)
+                    if gain < (PLAN_MIN_GAIN if gives_up else PLAN_FREE_GAIN):
+                        continue  # not worth what the drop costs
+                    options.append(((score(new), day.toordinal()), new, swapped, f, drop, day, starting))
+        options.sort(key=lambda o: o[0], reverse=True)  # later wins a tie: more information
+        out = []
+        for _, new, swapped, f, drop, day, starting in options[:PLAN_EXPAND]:
+            window = [d for d in days if d >= day]
+            drop_ros = ctx.ros_values.get(drop.player.key)
+            move = PlannedMove(
                 on=day,
                 add=f.player,
                 drop=drop.player,
                 usable_days=sorted(_usable_slots(swapped, f.player.key, window)),
                 slot_by_day=_usable_slots(swapped, f.player.key, window),
-                drop_days_given_up=[d for d in window if drop.player.key in lineup[d]],
-                gain=new.matchup_win_prob - analysis.matchup_win_prob,
+                drop_days_given_up=[d for d in window if drop.player.key in starting[d]],
+                gain=score(new) - score(state.analysis),
                 adds_left_after=0,
                 ros_cost_flag=drop_ros is not None and drop_ros > threshold,
                 claim=f.on_waivers,
             )
-        )
-        analysis, current = new, swapped
-        added_on[f.player.key] = day
-        candidates = [c for c in candidates if c.player.key != f.player.key]
-        droppable = [e for e in droppable if e.player.key != drop.player.key]
-        droppable.append(RosterEntry(f.player, "BN"))  # a later move may replace this add
-    return plan(moves, analysis, None if moves else "no move improves this week's outlook")
+            out.append(
+                _PlanState(
+                    analysis=new,
+                    current=swapped,
+                    candidates=tuple(c for c in state.candidates if c.player.key != f.player.key),
+                    # a later move may replace this add after his last useful game
+                    droppable=(*(e for e in state.droppable if e.player.key != drop.player.key), RosterEntry(f.player, "BN")),
+                    added_on={**state.added_on, f.player.key: day},
+                    moves=(*state.moves, move),
+                )
+            )
+        return out
+
+    # Beam search: the one best move now is not always the start of the best plan (the best
+    # player for the whole week can crowd out "today's best, then a better Fri/Sun fit").
+    start = _PlanState(base, ctx, tuple(candidates), tuple(pool), {}, ())
+    beam, finished = [start], [start]
+    for _ in range(base.adds_left):
+        nxt: dict[frozenset, _PlanState] = {}
+        for state in beam:
+            for new_state in expand(state):
+                nxt.setdefault(new_state.key, new_state)
+        if not nxt:
+            break
+        beam = sorted(nxt.values(), key=lambda st: -score(st.analysis))[:PLAN_BEAM]
+        finished += beam
+    best = max(finished, key=lambda st: (round(score(st.analysis), 6), -len(st.moves)))
+    return plan(list(best.moves), best.analysis, None if best.moves else "no move improves this week's outlook")
 
 
 def _best_follow_up(

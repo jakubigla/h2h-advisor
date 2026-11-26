@@ -156,6 +156,19 @@ def category_win_prob(
     return _NORMAL.cdf(margin / sd)
 
 
+def _wins_distribution(win_probs: Sequence[float]) -> list[float]:
+    """dist[w] = P(exactly w categories won) over independent categories (Poisson-binomial)."""
+    dist = [1.0]
+    for p in win_probs:
+        p = min(1.0, max(0.0, p))
+        nxt = [0.0] * (len(dist) + 1)
+        for w, mass in enumerate(dist):
+            nxt[w] += mass * (1 - p)
+            nxt[w + 1] += mass * p
+        dist = nxt
+    return dist
+
+
 def matchup_win_prob(win_probs: Sequence[float]) -> float:
     """P(win the matchup) over independent categories, a tie counting half.
 
@@ -165,17 +178,15 @@ def matchup_win_prob(win_probs: Sequence[float]) -> float:
     n = len(win_probs)
     if n == 0:
         return 0.5
-    dist = [1.0]  # dist[w] = P(w categories won so far)
-    for p in win_probs:
-        p = min(1.0, max(0.0, p))
-        nxt = [0.0] * (len(dist) + 1)
-        for w, mass in enumerate(dist):
-            nxt[w] += mass * (1 - p)
-            nxt[w + 1] += mass * p
-        dist = nxt
+    dist = _wins_distribution(win_probs)
     win = sum(mass for w, mass in enumerate(dist) if 2 * w > n)
     tie = dist[n // 2] if n % 2 == 0 else 0.0
     return win + 0.5 * tie
+
+
+def prob_at_least(win_probs: Sequence[float], k: int) -> float:
+    """P(win at least `k` categories), e.g. a 6-3 or better week with k=6."""
+    return sum(mass for w, mass in enumerate(_wins_distribution(win_probs)) if w >= k)
 
 
 def _status(c: Category, win_prob: float, my_proj: float, opp_proj: float, locked: bool) -> Status:
