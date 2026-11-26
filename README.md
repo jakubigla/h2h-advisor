@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img alt="version 0.2.0" src="https://img.shields.io/badge/version-0.2.0-c2410c?style=flat-square">
+  <img alt="version 0.2.1" src="https://img.shields.io/badge/version-0.2.1-c2410c?style=flat-square">
   <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude_Code-plugin-d97757?style=flat-square&logo=claude&logoColor=white">
   <img alt="Claude Desktop" src="https://img.shields.io/badge/Claude-Desktop-d97757?style=flat-square&logo=claude&logoColor=white">
   <img alt="read-only" src="https://img.shields.io/badge/Yahoo_%C2%B7_BBM-read--only-15803d?style=flat-square">
