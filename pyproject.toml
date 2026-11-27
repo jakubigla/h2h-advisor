@@ -1,6 +1,6 @@
 [project]
 name = "h2h-advisor"
-version = "0.2.8"
+version = "0.2.9"
 description = "Read-only MCP server giving fantasy basketball advice from Yahoo and Basketball Monster data"
 readme = "README.md"
 requires-python = ">=3.12"
