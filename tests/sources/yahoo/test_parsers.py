@@ -193,6 +193,36 @@ def test_parse_matchup_current_week_requires_score_row():
         parsers.parse_matchup(html, "51347", moves_used=0)
 
 
+def test_parse_matchup_future_week_reads_dashes_as_zero():
+    # Before a week starts Yahoo shows "-" and "-/-" for every stat; the page
+    # still names the opponent and counts each side's games for the week.
+    m = parsers.parse_matchup(
+        load("matchup_57243_future.html"), "57243", moves_used=0, current=False
+    )
+    assert m.week == 7
+    assert (m.opponent_team_id, m.opponent_name) == ("3", "Team 2")
+    zero = StatLine(
+        fgm=0, fga=0, ftm=0, fta=0, tpm=0, pts=0, reb=0, ast=0, stl=0, blk=0, to=0
+    )
+    assert m.my_totals == zero
+    assert m.opp_totals == zero
+    assert (m.cats_won, m.cats_lost) == (0, 0)
+    assert (m.my_games_played, m.my_games_total, m.my_games_remaining) == (0, 22, 22)
+    assert (m.opp_games_played, m.opp_games_total, m.opp_games_remaining) == (
+        0,
+        23,
+        23,
+    )
+
+
+def test_parse_matchup_rejects_text_that_is_not_a_dash():
+    original = load("matchup_57243_future.html")
+    html = original.replace(">-/-<", ">n/a<", 1)
+    assert html != original  # the replacement hit its target
+    with pytest.raises(ParseError, match="FGM/A"):
+        parsers.parse_matchup(html, "57243", moves_used=0, current=False)
+
+
 def test_parse_matchup_week():
     assert parsers.parse_matchup_week(load("matchup_51347.html")) == 6
 

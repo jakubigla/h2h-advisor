@@ -198,31 +198,40 @@ def _number(text: str, page: str, what: str) -> float:
         raise ParseError(page, f"{what}: expected a number, got {cleaned!r}") from exc
 
 
+# Yahoo's matchup cell for a stat with nothing recorded yet (a week not started).
+_NO_STAT = "-"
+
+
+def _total(text: str, page: str, what: str) -> float:
+    """A matchup total: a number, or Yahoo's "-" before any game counts (0)."""
+    return 0.0 if _norm(text) == _NO_STAT else _number(text, page, what)
+
+
 def _made_attempted(text: str, page: str, what: str) -> tuple[float, float]:
     made, sep, attempted = _norm(text).partition("/")
     if not sep:
         raise ParseError(page, f"{what}: expected made/attempted, got {text!r}")
-    return _number(made, page, what), _number(attempted, page, what)
+    return _total(made, page, what), _total(attempted, page, what)
 
 
 def _team_row_totals(cells: list[str], columns: dict[str, int], page: str) -> StatLine:
-    def at(name: str) -> str:
-        return cells[columns[name]]
+    def at(name: str) -> float:
+        return _total(cells[columns[name]], page, name)
 
-    fgm, fga = _made_attempted(at("FGM/A"), page, "FGM/A")
-    ftm, fta = _made_attempted(at("FTM/A"), page, "FTM/A")
+    fgm, fga = _made_attempted(cells[columns["FGM/A"]], page, "FGM/A")
+    ftm, fta = _made_attempted(cells[columns["FTM/A"]], page, "FTM/A")
     return StatLine(
         fgm=fgm,
         fga=fga,
         ftm=ftm,
         fta=fta,
-        tpm=_number(at("3PTM"), page, "3PTM"),
-        pts=_number(at("PTS"), page, "PTS"),
-        reb=_number(at("REB"), page, "REB"),
-        ast=_number(at("AST"), page, "AST"),
-        stl=_number(at("ST"), page, "ST"),
-        blk=_number(at("BLK"), page, "BLK"),
-        to=_number(at("TO"), page, "TO"),
+        tpm=at("3PTM"),
+        pts=at("PTS"),
+        reb=at("REB"),
+        ast=at("AST"),
+        stl=at("ST"),
+        blk=at("BLK"),
+        to=at("TO"),
     )
 
 
